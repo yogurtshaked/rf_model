@@ -5,18 +5,17 @@ import joblib
 import numpy as np
 import os
 import uvicorn
+from preprocessing_utils import preprocess_data  # Import the function here
 
 # Load the pre-trained model
 model = joblib.load('model.pkl')
-
-preprocess_data = joblib.load('rf_preprocessing.pkl')
 
 # Initialize the FastAPI app
 app = FastAPI()
 
 # Define input format
 class SensorData(BaseModel):
-    date: str  # make sure your frontend sends this!
+    date: str  # Make sure your frontend sends this!
     temperature: float
     humidity: float
     tds: float
@@ -27,10 +26,10 @@ def predict(data: SensorData):
     # Create DataFrame from input data
     input_data = pd.DataFrame([data.dict()])
 
-    # Apply preprocessing
-    processed_data = preprocess_data(input_data)
+    # Apply preprocessing (function imported from preprocessing_utils)
+    processed_data = preprocess_data(input_data)  # Use the function to process input data
 
-    # Extract features (make sure to match training feature names)
+    # Extract features (ensure you match the training feature names)
     features = processed_data[['Temperature', 'Humidity', 'TDS Value', 'pH Level', 'Temperature Lag 1',
                                'Temperature Lag 2', 'Temperature Lag 3', 'Temperature Lag 7',
                                'Humidity Lag 1', 'Humidity Lag 2', 'Humidity Lag 3', 'Humidity Lag 7',
@@ -41,10 +40,10 @@ def predict(data: SensorData):
                                'TDS Value Rolling Mean', 'TDS Value Rolling Std',
                                'pH Level Rolling Mean', 'pH Level Rolling Std', 'Day of Week', 'Month']]
 
-    # Make prediction
+    # Make prediction using the loaded model
     prediction = model.predict(features)
 
-    # Return predicted harvest day
+    # Return the predicted harvest day
     return {"predicted_harvest_day": int(prediction[0])}
 
 # For local and Render deployment
