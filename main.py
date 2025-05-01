@@ -26,6 +26,14 @@ def predict(data: SensorData):
     # Create DataFrame from input data
     input_data = pd.DataFrame([data.dict()])
 
+    # Rename the columns to match the preprocessing function's expectations
+    input_data.rename(columns={
+        'temperature': 'Temperature',
+        'humidity': 'Humidity',
+        'tds': 'TDS Value',
+        'ph': 'pH Level'
+    }, inplace=True)
+
     # Apply preprocessing (function imported from preprocessing_utils)
     processed_data = preprocess_data(input_data)  # Use the function to process input data
 
