@@ -2,14 +2,16 @@ from fastapi import FastAPI
 from pydantic import BaseModel
 import joblib
 import numpy as np
+import os
+import uvicorn
 
-# Load the pre-trained Random Forest model from model.pkl
+# Load the pre-trained model
 model = joblib.load('model.pkl')
 
 # Initialize the FastAPI app
 app = FastAPI()
 
-# Define input data format using Pydantic
+# Define input format
 class SensorData(BaseModel):
     temperature: float
     humidity: float
@@ -17,13 +19,18 @@ class SensorData(BaseModel):
     ph: float
 
 # Define prediction endpoint
-@app.route('/predict', methods=['POST'])
+@app.post('/predict')
 def predict(data: SensorData):
-    # Extract data from the request
-    input_data = np.array([[data.temperature, data.humidity, data.tds, data.ph]])
+    try:
+        # Prepare input data
+        input_data = np.array([[data.temperature, data.humidity, data.tds, data.ph]])
+        # Perform prediction
+        prediction = model.predict(input_data)
+        return {"predicted_day": int(prediction[0])}
+    except Exception as e:
+        return {"error": str(e)}
 
-    # Make prediction using the Random Forest model
-    prediction = model.predict(input_data)
-
-    # Return the predicted harvest day
-    return {"predicted_harvest_day": int(prediction[0])}
+# For local and Render deployment
+if __name__ == "__main__":
+    port = int(os.environ.get("PORT", 10000))
+    uvicorn.run("main:app", host="0.0.0.0", port=port)
