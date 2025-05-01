@@ -1,3 +1,5 @@
+import pandas as pd
+
 def preprocess_data(lettuce_df):
     lag_features = ['Temperature', 'Humidity', 'TDS Value', 'pH Level']
     lags = [1, 2, 3, 7]
