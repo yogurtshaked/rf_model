@@ -15,11 +15,12 @@ def preprocess_data(lettuce_df):
 
     # Ensure the index is datetime
     if not isinstance(lettuce_df.index, pd.DatetimeIndex):
-        if 'Date' in lettuce_df.columns:
-            lettuce_df['Date'] = pd.to_datetime(lettuce_df['Date'])
-            lettuce_df.set_index('Date', inplace=True)
+        if 'date' in lettuce_df.columns:
+            lettuce_df['date'] = pd.to_datetime(lettuce_df['date'])
+            lettuce_df.set_index('date', inplace=True)
         else:
-            raise ValueError("DataFrame must contain a 'Date' column to set as index.")
+            raise ValueError("DataFrame must contain a 'date' column to set as index.")
+
 
     lettuce_df['Day of Week'] = lettuce_df.index.dayofweek + 1
     lettuce_df['Month'] = lettuce_df.index.month
