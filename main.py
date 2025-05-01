@@ -8,7 +8,7 @@ import uvicorn
 # Load the pre-trained model
 model = joblib.load('model.pkl')
 
-preprocess_data = joblib.load('preprocessing.pkl')
+preprocess_data = joblib.load('rf_preprocessing.pkl')
 
 # Initialize the FastAPI app
 app = FastAPI()
