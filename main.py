@@ -17,7 +17,7 @@ class SensorData(BaseModel):
     ph: float
 
 # Define prediction endpoint
-@app.post("/predict")
+@app.route('/predict', methods=['POST'])
 def predict(data: SensorData):
     # Extract data from the request
     input_data = np.array([[data.temperature, data.humidity, data.tds, data.ph]])
