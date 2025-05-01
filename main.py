@@ -13,22 +13,25 @@ app = FastAPI()
 
 # Define input format
 class SensorData(BaseModel):
+    date: str  # make sure your frontend sends this!
     temperature: float
     humidity: float
     tds: float
     ph: float
 
-# Define prediction endpoint
+# Prediction endpoint
 @app.post('/predict')
 def predict(data: SensorData):
-    try:
-        # Prepare input data
-        input_data = np.array([[data.temperature, data.humidity, data.tds, data.ph]])
-        # Perform prediction
-        prediction = model.predict(input_data)
-        return {"predicted_day": int(prediction[0])}
-    except Exception as e:
-        return {"error": str(e)}
+    input_df = pd.DataFrame([{
+        'Date': data.date,
+        'Temperature': data.temperature,
+        'Humidity': data.humidity,
+        'TDS Value': data.tds,
+        'pH Level': data.ph
+    }])
+
+    prediction = pipeline.predict(input_df)
+    return {'predicted_day': int(prediction[0])}
 
 # For local and Render deployment
 if __name__ == "__main__":
