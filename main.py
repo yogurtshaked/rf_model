@@ -20,70 +20,55 @@ class SensorData(BaseModel):
     tds: float
     ph: float
 
+def create_lagged_features(input_df):
+    lag_features = ['Temperature', 'Humidity', 'TDS Value', 'pH Level']
+    lags = [1, 2, 3, 7]
+    window = 7
+
+    # 1) compute shifts + rolling
+    for feature in lag_features:
+        for lag in lags:
+            input_df[f"{feature} Lag {lag}"] = input_df[feature].shift(lag)
+        input_df[f"{feature} Rolling Mean"] = input_df[feature].rolling(window=window).mean()
+        input_df[f"{feature} Rolling Std"]  = input_df[feature].rolling(window=window).std()
+
+    input_df['Day of Week'] = input_df['Date'].dt.dayofweek + 1
+    input_df['Month']       = input_df['Date'].dt.month
+
+    # 2) fill all the NaNs with sensible defaults
+    for feature in lag_features:
+        for lag in lags:
+            col = f"{feature} Lag {lag}"
+            input_df[col].fillna(input_df[feature], inplace=True)
+        mean_col = f"{feature} Rolling Mean"
+        std_col  = f"{feature} Rolling Std"
+        input_df[mean_col].fillna(input_df[feature], inplace=True)
+        input_df[std_col].fillna(0, inplace=True)
+
+    return input_df
+
 @app.post('/predict')
 def predict(data: SensorData):
     try:
-        # Create a DataFrame from input (only the user-provided features)
         input_df = pd.DataFrame([{
-            'Date': datetime.strptime(data.date, '%Y-%m-%d'),
+            'Date':  datetime.strptime(data.date, '%Y-%m-%d'),
             'Temperature': data.temperature,
-            'Humidity': data.humidity,
-            'TDS Value': data.tds,
-            'pH Level': data.ph
+            'Humidity':    data.humidity,
+            'TDS Value':   data.tds,
+            'pH Level':    data.ph
         }])
-
-        # Debug: print the input data
-        print("Input DF:", input_df)
-        
-        # Convert 'Date' column to datetime format to extract time-based features
         input_df['Date'] = pd.to_datetime(input_df['Date'])
 
-        def create_lagged_features(input_df):
-            # Add placeholder columns for missing features (lagged and rolling features)
-            lag_features = ['Temperature', 'Humidity', 'TDS Value', 'pH Level']
-            lags = [1, 2, 3, 7]  # These lags were used during model training
-        
-            # Add placeholder lag features (use the .shift() method to create lag features)
-            for feature in lag_features:
-                for lag in lags:
-                    input_df[f"{feature} Lag {lag}"] = input_df[feature].shift(lag)
-    
-            # Add placeholder rolling stats (mean and std)
-            window = 7
-            for feature in lag_features:
-                input_df[f"{feature} Rolling Mean"] = input_df[feature].rolling(window=window).mean()
-                input_df[f"{feature} Rolling Std"] = input_df[feature].rolling(window=window).std()
-    
-            # Add time-based features (Day of Week, Month) derived from 'Date'
-            input_df['Day of Week'] = input_df['Date'].dt.dayofweek + 1  # Monday = 1, Sunday = 7
-            input_df['Month'] = input_df['Date'].dt.month  # Extract month (1-12)
+        # build all features and impute
+        full_df = create_lagged_features(input_df)
 
-        create_lagged_features(input_df)
-        input_df.head()
-        
-        cleaned_df = input_df.dropna()
-        cleaned_df.head()
+        # now we know full_df has no NaNs, so we can skip dropna()
+        processed_input = preprocessor.transform(full_df)
+        prediction      = model.predict(processed_input)
 
-        # Debug: print the updated DataFrame
-        print("Updated Input DF with placeholders:", cleaned_df)
-
-        # Transform the input using the preprocessor (it expects 30 features)
-        processed_input = preprocessor.transform(cleaned_df)
-        print("Processed Input:", processed_input)
-
-        # Predict using the model
-        prediction = model.predict(processed_input)
-
-        # Debug: print prediction
-        print("Prediction:", prediction)
-
-        # Ensure the prediction is valid
-        if prediction is not None and len(prediction) > 0:
-            return {"predicted_harvest_day": int(prediction[0])}
-        else:
-            return {"error": "Predicted harvest day is missing or invalid."}
+        return {"predicted_harvest_day": int(prediction[0])}
 
     except Exception as e:
-        # Capture and log the error message
-        print("Exception:", str(e))
+        print("Exception:", e)
         return {"error": str(e)}
+
