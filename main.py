@@ -34,11 +34,12 @@ def predict(data: SensorData):
 
         # Transform input using preprocessor
         processed_input = preprocessor.transform(input_df)
+        print("Processed Input:", processed_input)
 
         # Debug: print processed shape
         print("Processed shape:", processed_input.shape)
 
-        # Predict
+        # Predict using the model
         prediction = model.predict(processed_input)
 
         # Debug: print prediction
@@ -51,5 +52,6 @@ def predict(data: SensorData):
             return {"error": "Predicted harvest day is missing or invalid."}
 
     except Exception as e:
+        # Capture and log the error message
         print("Exception:", str(e))
         return {"error": str(e)}
