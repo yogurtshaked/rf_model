@@ -2,57 +2,71 @@ from fastapi import FastAPI
 from pydantic import BaseModel
 import joblib
 import pandas as pd
-from datetime import datetime
+from datetime import datetime, timedelta
+import numpy as np
 
-# Load preprocessor and model
-preprocessor = joblib.load('preprocessor.pkl')
-model = joblib.load('model.pkl')
+# === Load trained model and scaler ===
+scaler = joblib.load('scaler_X.pkl')
+model = joblib.load('rf_model.pkl')
+feature_names = joblib.load('feature_names.pkl')
 
-# Initialize FastAPI app
+# === Initialize FastAPI ===
 app = FastAPI()
 
-# Input data format
+# === Request schema ===
 class SensorData(BaseModel):
     temperature: float
     humidity: float
     tds: float
     ph: float
-    date: str  # Date in 'YYYY-MM-DD' format
+    date: str  # Format: 'YYYY-MM-DD'
 
+# === Feature engineering: lags, rolling stats, time components ===
+def create_features_from_input(data_df):
+    df = data_df.copy()
+    df['day_of_week'] = df.index.dayofweek
+    df['month'] = df.index.month
+
+    for col in ['Temperature', 'Humidity', 'TDS Value', 'pH Level']:
+        for lag in [1, 2, 3, 7]:
+            df[f'{col}_lag_{lag}'] = df[col].shift(lag)
+        df[f'{col}_roll_mean'] = df[col].rolling(window=7).mean()
+        df[f'{col}_roll_std']  = df[col].rolling(window=7).std()
+
+    return df.dropna()
+
+# === Prediction endpoint ===
 @app.post('/predict')
 def predict(data: SensorData):
     try:
-        # Create a DataFrame from the user input, including the date
-        input_data = pd.DataFrame([{
-            'Temperature': data.temperature,
-            'Humidity': data.humidity,
-            'TDS Value': data.tds,
-            'pH Level': data.ph,
-            'Date': datetime.strptime(data.date, '%Y-%m-%d')  # Convert string to datetime
-        }])
+        # Create 10-day history with constant values to allow lag/rolling features
+        date = datetime.strptime(data.date, '%Y-%m-%d')
+        date_range = pd.date_range(end=date, periods=10)
 
-        # Debug: print input
-        print("Input DF:", input_data)
+        df = pd.DataFrame({
+            'Date': date_range,
+            'Temperature': [data.temperature] * 10,
+            'Humidity': [data.humidity] * 10,
+            'TDS Value': [data.tds] * 10,
+            'pH Level': [data.ph] * 10
+        }).set_index('Date')
 
-        # Pass the data through the preprocessor to generate features (lags, rolling, time-based)
-        processed_input = preprocessor.transform(input_data)
+        # Generate features
+        features_df = create_features_from_input(df)
 
-        # Debug: print processed shape
-        print("Processed shape:", processed_input.shape)
+        if features_df.empty:
+            return {"error": "Not enough data to compute lag/rolling features."}
 
-        # Make the prediction using the preprocessed data
-        prediction = model.predict(processed_input)
+        latest_row = features_df.tail(1)
 
-        # Debug: print the prediction
-        print("Prediction:", prediction)
+        # Match feature order to training
+        latest_row = latest_row[feature_names]
 
-        # Ensure the prediction is valid and return the result
-        if prediction is not None and len(prediction) > 0:
-            return {"predicted_harvest_day": int(prediction[0])}
-        else:
-            return {"error": "Predicted harvest day is missing or invalid."}
+        # Scale and predict
+        X_scaled = scaler.transform(latest_row)
+        prediction = model.predict(X_scaled)
+
+        return {"predicted_harvest_day": int(round(prediction[0]))}
 
     except Exception as e:
-        print("Exception:", str(e))
-        return {"error": str(e)}
-
+        return {"error": f"Prediction failed: {str(e)}"}
