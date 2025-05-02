@@ -1,74 +1,68 @@
+# server.py
+
 from fastapi import FastAPI
 from pydantic import BaseModel
 import joblib
-import numpy as np
 import pandas as pd
+from supabase import create_client, Client
 from datetime import datetime
 
-# Load preprocessor and model
-preprocessor = joblib.load('preprocessor.pkl')
-model = joblib.load('model.pkl')
+# ————— Supabase client (use service‐role key here, NOT anon key) —————
+SUPABASE_URL = "https://cudfnejuropkvoifwzao.supabase.co"
+SUPABASE_SERVICE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN1ZGZuZWp1cm9wa3ZvaWZ3emFvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDU5MTM4MDQsImV4cCI6MjA2MTQ4OTgwNH0.riIgH4d2eeAImiL622Esnk2Ub1e0HM1scJfyvRgTFAs"
+supabase: Client = create_client(SUPABASE_URL, SUPABASE_SERVICE_KEY)
 
-# Initialize FastAPI app
+# ————— Load your preprocessor & model —————
+preprocessor = joblib.load('preprocessor.pkl')
+model        = joblib.load('model.pkl')
+
 app = FastAPI()
 
-# Input data format
-class SensorData(BaseModel):
-    date: str
-    temperature: float
-    humidity: float
-    tds: float
-    ph: float
+class BatchRequest(BaseModel):
+    batch_id: str
 
-def create_lagged_features(input_df):
-    lag_features = ['Temperature', 'Humidity', 'TDS Value', 'pH Level']
-    lags = [1, 2, 3, 7]
+def create_lagged_features(df: pd.DataFrame) -> pd.DataFrame:
+    lag_features = ['Temperature','Humidity','TDS Value','pH Level']
+    lags = [1,2,3,7]
     window = 7
 
-    # 1) compute shifts + rolling
     for feature in lag_features:
         for lag in lags:
-            input_df[f"{feature} Lag {lag}"] = input_df[feature].shift(lag)
-        input_df[f"{feature} Rolling Mean"] = input_df[feature].rolling(window=window).mean()
-        input_df[f"{feature} Rolling Std"]  = input_df[feature].rolling(window=window).std()
+            df[f"{feature} Lag {lag}"] = df[feature].shift(lag)
+        df[f"{feature} Rolling Mean"] = df[feature].rolling(window).mean()
+        df[f"{feature} Rolling Std"]  = df[feature].rolling(window).std()
 
-    input_df['Day of Week'] = input_df['Date'].dt.dayofweek + 1
-    input_df['Month']       = input_df['Date'].dt.month
+    df['Day of Week'] = df['Date'].dt.dayofweek + 1
+    df['Month']       = df['Date'].dt.month
 
-    # 2) fill all the NaNs with sensible defaults
-    for feature in lag_features:
-        for lag in lags:
-            col = f"{feature} Lag {lag}"
-            input_df[col].fillna(input_df[feature], inplace=True)
-        mean_col = f"{feature} Rolling Mean"
-        std_col  = f"{feature} Rolling Std"
-        input_df[mean_col].fillna(input_df[feature], inplace=True)
-        input_df[std_col].fillna(0, inplace=True)
-
-    return input_df
+    return df
 
 @app.post('/predict')
-def predict(data: SensorData):
-    try:
-        input_df = pd.DataFrame([{
-            'Date':  datetime.strptime(data.date, '%Y-%m-%d'),
-            'Temperature': data.temperature,
-            'Humidity':    data.humidity,
-            'TDS Value':   data.tds,
-            'pH Level':    data.ph
-        }])
-        input_df['Date'] = pd.to_datetime(input_df['Date'])
+def predict(req: BatchRequest):
+    # 1) fetch last 7 days for this batch
+    resp = supabase\
+      .table('readings')\
+      .select('date,temperature,humidity,tds,ph')\
+      .eq('batch_id', req.batch_id)\
+      .order('date', desc=True)\
+      .limit(7)\
+      .execute()
 
-        # build all features and impute
-        full_df = create_lagged_features(input_df)
+    rows = resp.data or []
+    if len(rows) < 7:
+        return {"error": "Need at least 7 days of readings."}
 
-        # now we know full_df has no NaNs, so we can skip dropna()
-        processed_input = preprocessor.transform(full_df)
-        prediction      = model.predict(processed_input)
+    # 2) build DataFrame, sort oldest→newest
+    df = pd.DataFrame(rows)
+    df['Date'] = pd.to_datetime(df['date'])
+    df = df.sort_values('Date').reset_index(drop=True)
 
-        return {"predicted_harvest_day": int(prediction[0])}
+    # 3) compute lags & rolls, then take the final fully-populated row
+    feat_df = create_lagged_features(df)
+    last_row = feat_df.dropna().tail(1)
 
-    except Exception as e:
-        print("Exception:", e)
-        return {"error": str(e)}
+    # 4) transform & predict
+    X = preprocessor.transform(last_row)
+    y = model.predict(X)
 
+    return {"predicted_harvest_day": int(y[0])}
