@@ -56,8 +56,7 @@ def predict(window: List[SensorData]):
             'TDS Value':   rec.tds,
             'pH Level':    rec.ph
         })
-    df = pd.DataFrame(records)
-    df = df.sort_values('Date').reset_index(drop=True)
+    df = pd.DataFrame(records).sort_values('Date').reset_index(drop=True)
 
     # 2) pad backward to 7 days if needed
     if len(df) < 7:
@@ -74,8 +73,26 @@ def predict(window: List[SensorData]):
     # 4) pick the last fully-populated row
     last_row = df.dropna().tail(1)
 
-    # 5) transform & predict
-    X = preprocessor.transform(last_row)
-    y = model.predict(X)
+    # ---- DEBUG LOGGING ----
+    # 4a) raw features
+    raw_feat = last_row.to_dict(orient="records")[0]
+    print("=== RAW LAST ROW ===")
+    print(raw_feat)
+
+    # 4b) enforce training column order
+    cols = list(preprocessor.feature_names_in_)
+    last_row = last_row[cols]
+    print("=== FEATURE ORDER BEFORE TRANSFORM ===")
+    print(last_row.to_dict(orient="records")[0])
+
+    # 4c) after transform
+    processed = preprocessor.transform(last_row)
+    print("=== AFTER PREPROCESSOR.TRANSFORM ===")
+    print(processed)
+    # ------------------------
+
+    # 5) predict
+    y = model.predict(processed)
+    print("=== MODEL PREDICTION ===", y)
 
     return {"predicted_harvest_day": int(y[0])}
