@@ -2,6 +2,7 @@ from fastapi import FastAPI
 from pydantic import BaseModel
 import joblib
 import pandas as pd
+import numpy as np
 from datetime import datetime
 
 # Load preprocessor and model
@@ -29,13 +30,13 @@ def add_features(df):
     df['Day of Week'] = df['Date'].dt.dayofweek
     df['Month'] = df['Date'].dt.month
 
-    # Lag and rolling features (set to NaN for first row)
+    # Lag and rolling features (set to np.nan for first row)
     feature_columns = ['Temperature', 'Humidity', 'TDS Value', 'pH Level']
     for col in feature_columns:
         for lag in [1, 2, 3, 7]:
-            df[f'{col} Lag {lag}'] = pd.NA  # or float('nan')
-        df[f'{col} Rolling Mean'] = pd.NA
-        df[f'{col} Rolling Std'] = pd.NA
+            df[f'{col} Lag {lag}'] = np.nan
+        df[f'{col} Rolling Mean'] = np.nan
+        df[f'{col} Rolling Std'] = np.nan
 
     return df
 
