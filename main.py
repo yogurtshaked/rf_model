@@ -1,11 +1,9 @@
 from fastapi import FastAPI
 from pydantic import BaseModel
-import pandas as pd
 import joblib
 import numpy as np
 import os
 import uvicorn
-from preprocessing_utils import preprocess_data  # Import the function here
 
 # Load the pre-trained model
 model = joblib.load('model.pkl')
@@ -15,44 +13,22 @@ app = FastAPI()
 
 # Define input format
 class SensorData(BaseModel):
-    date: str  # Make sure your frontend sends this!
     temperature: float
     humidity: float
     tds: float
     ph: float
 
+# Define prediction endpoint
 @app.post('/predict')
 def predict(data: SensorData):
-    # Create DataFrame from input data
-    input_data = pd.DataFrame([data.dict()])
-
-    # Rename the columns to match the preprocessing function's expectations
-    input_data.rename(columns={
-        'temperature': 'Temperature',
-        'humidity': 'Humidity',
-        'tds': 'TDS Value',
-        'ph': 'pH Level'
-    }, inplace=True)
-
-    # Apply preprocessing (function imported from preprocessing_utils)
-    processed_data = preprocess_data(input_data)  # Use the function to process input data
-
-    # Extract features (ensure you match the training feature names)
-    features = processed_data[['Temperature', 'Humidity', 'TDS Value', 'pH Level', 'Temperature Lag 1',
-                               'Temperature Lag 2', 'Temperature Lag 3', 'Temperature Lag 7',
-                               'Humidity Lag 1', 'Humidity Lag 2', 'Humidity Lag 3', 'Humidity Lag 7',
-                               'TDS Value Lag 1', 'TDS Value Lag 2', 'TDS Value Lag 3',
-                               'TDS Value Lag 7', 'pH Level Lag 1', 'pH Level Lag 2', 'pH Level Lag 3',
-                               'pH Level Lag 7', 'Temperature Rolling Mean', 'Temperature Rolling Std',
-                               'Humidity Rolling Mean', 'Humidity Rolling Std',
-                               'TDS Value Rolling Mean', 'TDS Value Rolling Std',
-                               'pH Level Rolling Mean', 'pH Level Rolling Std', 'Day of Week', 'Month']]
-
-    # Make prediction using the loaded model
-    prediction = model.predict(features)
-
-    # Return the predicted harvest day
-    return {"predicted_harvest_day": int(prediction[0])}
+    try:
+        # Prepare input data
+        input_data = np.array([[data.temperature, data.humidity, data.tds, data.ph]])
+        # Perform prediction
+        prediction = model.predict(input_data)
+        return {"predicted_day": int(prediction[0])}
+    except Exception as e:
+        return {"error": str(e)}
 
 # For local and Render deployment
 if __name__ == "__main__":
