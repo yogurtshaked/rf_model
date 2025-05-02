@@ -34,24 +34,28 @@ def predict(data: SensorData):
 
         # Debug: print the input data
         print("Input DF:", input_df)
+        
+        # Convert 'Date' column to datetime format to extract time-based features
+        input_df['Date'] = pd.to_datetime(input_df['Date'])
 
         # Add placeholder columns for missing features (lagged and rolling features)
         lag_features = ['Temperature', 'Humidity', 'TDS Value', 'pH Level']
         lags = [1, 2, 3, 7]  # These lags were used during model training
-
-        # Add placeholder lag features and rolling stats (setting them to NaN or 0)
+    
+        # Add placeholder lag features (use the .shift() method to create lag features)
         for feature in lag_features:
             for lag in lags:
-                input_df[f"{feature} Lag {lag}"] = np.nan  # You can use 0 if NaN is not acceptable
+                input_df[f"{feature} Lag {lag}"] = input_df[feature].shift(lag)
 
         # Add placeholder rolling stats (mean and std)
+        window = 7
         for feature in lag_features:
-            input_df[f"{feature} Rolling Mean"] = np.nan
-            input_df[f"{feature} Rolling Std"] = np.nan
+            input_df[f"{feature} Rolling Mean"] = input_df[feature].rolling(window=window).mean()
+            input_df[f"{feature} Rolling Std"] = input_df[feature].rolling(window=window).std()
 
-        # Add time-based features (e.g., Day of Week, Month)
-        input_df['Day of Week'] = np.nan
-        input_df['Month'] = np.nan
+        # Add time-based features (Day of Week, Month) derived from 'Date'
+        input_df['Day of Week'] = input_df['Date'].dt.dayofweek + 1  # Monday = 1, Sunday = 7
+        input_df['Month'] = input_df['Date'].dt.month  # Extract month (1-12)
 
         # Debug: print the updated DataFrame
         print("Updated Input DF with placeholders:", input_df)
@@ -75,4 +79,4 @@ def predict(data: SensorData):
     except Exception as e:
         # Capture and log the error message
         print("Exception:", str(e))
-        return {"error": str(e)} 
+        return {"error": str(e)}
