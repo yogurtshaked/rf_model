@@ -19,32 +19,34 @@ class SensorData(BaseModel):
 
 @app.post("/predict")
 def predict(window: List[SensorData]):
-    # 1) Build raw DF
-    recs = [{
+    # build DataFrame
+    df = pd.DataFrame([{
         "Date":        datetime.strptime(r.date, "%Y-%m-%d"),
         "Temperature": r.temperature,
         "Humidity":    r.humidity,
         "TDS Value":   r.tds,
         "pH Level":    r.ph
-    } for r in window]
-    df = pd.DataFrame(recs)
+    } for r in window])
 
-    # 2) Pad up to 7 days if needed, then featurize
+    # pad → featurize
     df = pad_to_7(df)
-    df = create_lagged_features(df)
+    df_feat = create_lagged_features(df)
 
-    # 3) Drop windows with NaNs → one row per valid 7-day window
-    df_clean = df.dropna().reset_index(drop=True)
+    # drop the first max_lag rows (just like dropna in the notebook)
+    max_lag = 7
+    if len(df_feat) > max_lag:
+        df_windows = df_feat.iloc[max_lag:].reset_index(drop=True)
+    else:
+        df_windows = df_feat.tail(1).reset_index(drop=True)
 
-    # 4) Enforce the exact column order your pipeline expects
-    feat_cols = list(preprocessor.feature_names_in_)
-    X_all     = preprocessor.transform(df_clean[feat_cols])
+    # select & transform all windows
+    cols = preprocessor.feature_names_in_
+    X_all = preprocessor.transform(df_windows[cols])
 
-    # 5) Predict on every window, then take the mean
-    preds      = model.predict(X_all)
-    mean_pred  = float(preds.mean())
-
+    # predict + average
+    preds = model.predict(X_all)
     return {
-      "all_predictions":       preds.tolist(),
-      "predicted_harvest_day": mean_pred
+      "all_predictions": preds.tolist(),
+      "predicted_harvest_day": float(preds.mean())
     }
+
