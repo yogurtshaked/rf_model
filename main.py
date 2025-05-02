@@ -7,7 +7,7 @@ import numpy as np
 
 # === Load trained model and scaler ===
 scaler = joblib.load('scaler_X.pkl')
-model = joblib.load('rf_model.pkl')
+model = joblib.load('model.pkl')
 feature_names = joblib.load('feature_names.pkl')
 
 # === Initialize FastAPI ===
