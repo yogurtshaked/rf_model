@@ -17,7 +17,7 @@ class SensorData(BaseModel):
     temperature: float
     humidity:    float
     tds:         float
-    ph:          float
+    pH:          float
 
 @app.post("/predict")
 def predict(window: List[SensorData]):
@@ -27,7 +27,7 @@ def predict(window: List[SensorData]):
         "Temperature": r.temperature,
         "Humidity":    r.humidity,
         "TDS Value":   r.tds,
-        "pH Level":    r.ph
+        "pH Level":    r.pH
     } for r in window])
 
     # 2) pad until at least LAGS+1 rows
