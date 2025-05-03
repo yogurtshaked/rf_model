@@ -16,7 +16,7 @@ class SensorData(BaseModel):
     temperature: float
     humidity:    float
     tds:         float
-    ph:          float
+    pH:          float
 
 def create_lagged_features(df: pd.DataFrame) -> pd.DataFrame:
     lag_feats = ['Temperature', 'Humidity', 'TDS Value', 'pH Level']
@@ -54,7 +54,7 @@ def predict(window: List[SensorData]):
             'Temperature': rec.temperature,
             'Humidity':    rec.humidity,
             'TDS Value':   rec.tds,
-            'pH Level':    rec.ph
+            'pH Level':    rec.pH
         })
     df = pd.DataFrame(records).sort_values('Date').reset_index(drop=True)
 
