@@ -1,24 +1,48 @@
-import FastAPI
+from fastapi import FastAPI
 from typing import List
 from pydantic import BaseModel
 import joblib
 import pandas as pd
-from datetime import datetime
+from datetime import datetime, timedelta
 
-from features import create_lagged_features, pad_to_7
-
-# load artifacts
-preprocessor = joblib.load("preprocessor.pkl")
-model        = joblib.load("model.pkl")
+# --- load your artifacts ---
+preprocessor = joblib.load('preprocessor.pkl')
+model        = joblib.load('model.pkl')
 
 app = FastAPI()
 
 class SensorData(BaseModel):
-    date:        str   # "YYYY-MM-DD"
+    date: str        # 'YYYY-MM-DD'
     temperature: float
     humidity:    float
     tds:         float
-    pH:          float
+    ph:          float
+
+def create_lagged_features(df: pd.DataFrame) -> pd.DataFrame:
+    lag_feats = ['Temperature', 'Humidity', 'TDS Value', 'pH Level']
+    lags      = [1, 2, 3, 7]
+    window    = 7
+
+    # compute raw shifts & rolls
+    for f in lag_feats:
+        for lag in lags:
+            df[f"{f} Lag {lag}"] = df[f].shift(lag)
+        df[f"{f} Rolling Mean"] = df[f].rolling(window).mean()
+        df[f"{f} Rolling Std"]  = df[f].rolling(window).std()
+
+    # time features
+    df['Day of Week'] = df['Date'].dt.dayofweek + 1
+    df['Month']       = df['Date'].dt.month
+
+    # fill any NaNs (should only occur for the first few rows)
+    for f in lag_feats:
+        for lag in lags:
+            col = f"{f} Lag {lag}"
+            df[col].fillna(df[f], inplace=True)
+        df[f"{f} Rolling Mean"].fillna(df[f], inplace=True)
+        df[f"{f} Rolling Std"].fillna(0, inplace=True)
+
+    return df
 
 @app.post("/predict")
 def predict(window: List[SensorData]):
@@ -30,7 +54,7 @@ def predict(window: List[SensorData]):
             'Temperature': rec.temperature,
             'Humidity':    rec.humidity,
             'TDS Value':   rec.tds,
-            'pH Level':    rec.pH
+            'pH Level':    rec.ph
         })
     df = pd.DataFrame(records).sort_values('Date').reset_index(drop=True)
 
