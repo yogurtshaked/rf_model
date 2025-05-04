@@ -1,36 +1,50 @@
 # features.py
+
 import pandas as pd
 from datetime import timedelta
 
-LAGS      = [1, 2, 3, 7]
-WINDOW    = 7
-MIN_ROWS  = max(LAGS) + 1  # = 8
-
-def pad_to_minimum(df: pd.DataFrame) -> pd.DataFrame:
+def pad_to_7(df: pd.DataFrame) -> pd.DataFrame:
     """
-    If df has fewer than MIN_ROWS, 
-    duplicate the first reading backward until
-    you have exactly MIN_ROWS.
+    If df has <7 rows, duplicate the first row backward until length == 7.
     """
-    while len(df) < MIN_ROWS:
+    while len(df) < 7:
         first = df.iloc[0].copy()
         first['Date'] = first['Date'] - timedelta(days=1)
         df = pd.concat([pd.DataFrame([first]), df], ignore_index=True)
     return df.sort_values("Date").reset_index(drop=True)
 
+
 def create_lagged_features(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Given a DataFrame with columns
+      ['Date','Temperature','Humidity','TDS Value','pH Level']
+    this will:
+      • compute lags [1,2,3,7] for each feature
+      • compute 7-day rolling mean & std
+      • extract Day of Week & Month
+      • fill any NaNs (only in the first few rows) by copying today's value / zero
+    """
     df = df.sort_values("Date").reset_index(drop=True)
-    lag_feats = ['Temperature','Humidity','TDS Value','pH Level']
+    lag_feats = ['Temperature', 'Humidity', 'TDS Value', 'pH Level']
+    lags      = [1, 2, 3, 7]
+    window    = 7
 
-    # raw shifts & rolling
+    # 1) raw shifts & rolls
     for f in lag_feats:
-        for lag in LAGS:
+        for lag in lags:
             df[f"{f} Lag {lag}"] = df[f].shift(lag)
-        df[f"{f} Rolling Mean"] = df[f].rolling(WINDOW).mean()
-        df[f"{f} Rolling Std"]  = df[f].rolling(WINDOW).std()
+        df[f"{f} Rolling Mean"] = df[f].rolling(window).mean()
+        df[f"{f} Rolling Std"]  = df[f].rolling(window).std()
 
-    # Excel-style Day of Week (Sunday=1…Saturday=7)
-    df['Day of Week'] = ((df['Date'].dt.dayofweek + 1) % 7) + 1
+    # 2) time features
+    df['Day of Week'] = df['Date'].dt.dayofweek + 1
     df['Month']       = df['Date'].dt.month
+
+    # 3) fill‐in defaults for NaNs
+    for f in lag_feats:
+        for lag in lags:
+            df[f"{f} Lag {lag}"].fillna(df[f], inplace=True)
+        df[f"{f} Rolling Mean"].fillna(df[f], inplace=True)
+        df[f"{f} Rolling Std"].fillna(0, inplace=True)
 
     return df
