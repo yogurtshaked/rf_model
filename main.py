@@ -23,24 +23,32 @@ def create_lagged_features(df: pd.DataFrame) -> pd.DataFrame:
     lags      = [1, 2, 3, 7]
     window    = 7
 
+    # 1) lags & rolling stats
     for f in lag_feats:
         for lag in lags:
             df[f"{f} Lag {lag}"] = df[f].shift(lag)
+
         df[f"{f} Rolling Mean"] = df[f].rolling(window).mean()
         df[f"{f} Rolling Std"]  = df[f].rolling(window).std()
 
+    # 2) calendar features
     df['Day of Week'] = df['Date'].dt.dayofweek + 1
     df['Month']       = df['Date'].dt.month
 
-    # back‑fill the very first rows so the model never sees NaNs
+    # 3) back‑fill the NaNs **without chained assignment**
     for f in lag_feats:
-        for lag in lags:
+        for lag in lags:                                # ← lagged columns
             col = f"{f} Lag {lag}"
-            df[col].fillna(df[f], inplace=True)
-        df[f"{f} Rolling Mean"].fillna(df[f], inplace=True)
-        df[f"{f} Rolling Std"].fillna(0,      inplace=True)
+            df[col] = df[col].fillna(df[f])
+
+        roll_mean = f"{f} Rolling Mean"
+        roll_std  = f"{f} Rolling Std"
+
+        df[roll_mean] = df[roll_mean].fillna(df[f])     # mean → raw value
+        df[roll_std]  = df[roll_std].fillna(0)          # std  → 0
 
     return df
+
 
 # ── PREDICT ENDPOINT ──────────────────────────────────────────
 @app.post("/predict")
