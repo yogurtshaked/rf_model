@@ -18,36 +18,57 @@ class SensorData(BaseModel):
     temperature: float
     humidity:    float
     tds:         float
-    ph:          float
+    pH:          float
 
 @app.post("/predict")
 def predict(window: List[SensorData]):
-    # build raw DF
-    records = [{
-        "Date":        datetime.strptime(r.date, "%Y-%m-%d"),
-        "Temperature": r.temperature,
-        "Humidity":    r.humidity,
-        "TDS Value":   r.tds,
-        "pH Level":    r.ph
-    } for r in window]
-    df = pd.DataFrame(records)
+    # 1) build DF
+    records = []
+    for rec in window:
+        records.append({
+            'Date':        datetime.strptime(rec.date, "%Y-%m-%d"),
+            'Temperature': rec.temperature,
+            'Humidity':    rec.humidity,
+            'TDS Value':   rec.tds,
+            'pH Level':    rec.pH
+        })
+    df = pd.DataFrame(records).sort_values('Date').reset_index(drop=True)
 
-    # pad & featurize
-    df = pad_to_7(df)
+    # 2) pad backward to 7 days if needed
+    if len(df) < 7:
+        first = df.iloc[0]
+        while len(df) < 7:
+            first = first.copy()
+            first['Date'] = first['Date'] - timedelta(days=1)
+            df = pd.concat([pd.DataFrame([first]), df], ignore_index=True)
+        df = df.sort_values('Date').reset_index(drop=True)
+
+    # 3) feature-engineer
     df = create_lagged_features(df)
 
-    # pick the last fully‐populated row
+    # 4) pick the last fully-populated row
     last_row = df.dropna().tail(1)
 
-    # enforce the exact column order your pipeline saw at train time
-    feature_cols = list(preprocessor.feature_names_in_)
-    last_row     = last_row[feature_cols]
+    # ---- DEBUG LOGGING ----
+    # 4a) raw features
+    raw_feat = last_row.to_dict(orient="records")[0]
+    print("=== RAW LAST ROW ===")
+    print(raw_feat)
 
-    # debug logs (optional)
-    print("FEATURE VECTOR:", last_row.to_dict(orient="records")[0])
-    X = preprocessor.transform(last_row)
-    print("TRANSFORMED VECTOR:", X)
-    y = model.predict(X)
-    print("PREDICTION:", y)
+    # 4b) enforce training column order
+    cols = list(preprocessor.feature_names_in_)
+    last_row = last_row[cols]
+    print("=== FEATURE ORDER BEFORE TRANSFORM ===")
+    print(last_row.to_dict(orient="records")[0])
+
+    # 4c) after transform
+    processed = preprocessor.transform(last_row)
+    print("=== AFTER PREPROCESSOR.TRANSFORM ===")
+    print(processed)
+    # ------------------------
+
+    # 5) predict
+    y = model.predict(processed)
+    print("=== MODEL PREDICTION ===", y)
 
     return {"predicted_harvest_day": int(y[0])}
