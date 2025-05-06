@@ -66,22 +66,24 @@ def predict(window: List[SensorData]):
     } for r in window]).sort_values('Date').reset_index(drop=True)
 
     # 2) pad backwards (duplicate the earliest row −1 day) until len == 7
+    # inside your /predict endpoint, before feature engineeirng:
     while len(df) < 7:
         first = df.iloc[0].copy()
-        first['Date'] = first['Date'] - timedelta(days=1)
+        first['Date'] -= timedelta(days=1)
         df = pd.concat([pd.DataFrame([first]), df], ignore_index=True)
+# now df has >=7, take the last 7
+    df = df.sort_values('Date').reset_index(drop=True).tail(7)
 
-    # 3) feature‑engineering
+    if len(window) < 7:
+        return {"predicted_harvest_day": 45}
+        
+    df = df.tail(7).reset_index(drop=True)
+
+    # 5) Feature-engineer (lags, rolls, etc.) exactly as in training
     df = create_lagged_features(df)
 
-    # 4) take the **newest** fully‑populated row for prediction
-    last_row = df.tail(1)
-
-    # 5) keep training‑time feature order
-    last_row = last_row[list(preprocessor.feature_names_in_)]
-
-    # 6) preprocess & predict
-    X  = preprocessor.transform(last_row)
-    y  = model.predict(X)
+    last_row = df[list(preprocessor.feature_names_in_)]
+    X = preprocessor.transform(last_row)
+    y = model.predict(X)
 
     return {"predicted_harvest_day": int(y[0])}
