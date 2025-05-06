@@ -71,7 +71,7 @@ def predict(window: List\[SensorData]):
         'pH Level':    r.pH,
     } for r in window]).sort_values('Date').reset_index(drop=True)
     
-    # 🟢 Padding (only needed if you want >=7 for lags/rolling)
+    # Padding (only needed if you want >=7 for lags/rolling)
     while len(df) < 7:
         first = df.iloc[0].copy()
         first['Date'] -= timedelta(days=1)
