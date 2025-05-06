@@ -1,17 +1,18 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI
 from pydantic import BaseModel
 from typing import List
 import pandas as pd
 import numpy as np
 import joblib
-import datetime
+import os
+
+# Load pre-trained model and preprocessor
+model = joblib.load("model.pkl")
+preprocessor = joblib.load("preprocessor.pkl")
 
 app = FastAPI()
 
-# Load trained model and preprocessor (e.g., a scaler)
-model = joblib.load("model.pkl")
-preprocessor = joblib.load("preprocessor.pkl")  # e.g., StandardScaler or full pipeline
-
+# Define the structure of input data
 class Reading(BaseModel):
     date: str
     temperature: float
@@ -20,54 +21,49 @@ class Reading(BaseModel):
     pH: float
 
 @app.post("/predict")
-def predict_growth_days(readings: List[Reading]):
-    if len(readings) < 7:
-        return {"predicted_harvest_day": 45}
+def predict(readings: List[Reading]):
+    try:
+        # Convert readings to a DataFrame
+        df = pd.DataFrame([{
+            "Temperature": float(r.temperature),
+            "Humidity": float(r.humidity),
+            "TDS Value": float(r.tds),
+            "pH Level": float(r.pH),
+            "date": pd.to_datetime(r.date)
+        } for r in readings])
 
-    # Convert to DataFrame
-    df = pd.DataFrame([r.dict() for r in readings])
-    df['date'] = pd.to_datetime(df['date'])
-    df.set_index('date', inplace=True)
-    df = df.sort_index()
+        df = df.sort_values(by="date")
+        df.set_index("date", inplace=True)
 
-    # Rename to match feature names in training
-    df.rename(columns={
-        'temperature': 'Temperature',
-        'humidity': 'Humidity',
-        'tds': 'TDS Value',
-        'pH': 'pH Level'
-    }, inplace=True)
+        # Create lag and rolling features
+        df["lag_temp"] = df["Temperature"].shift(1)
+        df["lag_humidity"] = df["Humidity"].shift(1)
+        df["lag_tds"] = df["TDS Value"].shift(1)
+        df["lag_ph"] = df["pH Level"].shift(1)
 
-    # Feature engineering
-    df = create_lagged_features(df)
+        df["roll_temp"] = df["Temperature"].rolling(window=3).mean()
+        df["roll_humidity"] = df["Humidity"].rolling(window=3).mean()
+        df["roll_tds"] = df["TDS Value"].rolling(window=3).mean()
+        df["roll_ph"] = df["pH Level"].rolling(window=3).mean()
 
-    # Drop rows with NaNs due to lag/rolling features
-    df_clean = df.dropna()
+        # Drop rows with NaN values from lag/rolling ops
+        df_clean = df.dropna()
 
-    if df_clean.empty:
-        return {"predicted_harvest_day": 45}
+        # Extract the latest row for prediction
+        X = df_clean.iloc[[-1]]
 
-    # Only predict the last date (like a snapshot prediction)
-    X = df_clean.iloc[[-1]]  # Last row only
-    X_scaled = preprocessor.transform(X)  # Match preprocessing used in training
+        # Debug logs for feature checking
+        print("Predicting with input:")
+        print(X)
+        print("Columns:", X.columns.tolist())
+        print("NaNs:", X.isna().sum())
 
-    prediction = model.predict(X_scaled)[0]
-    return {"predicted_harvest_day": int(prediction)}
+        # Transform with preprocessor and predict
+        X_scaled = preprocessor.transform(X)
+        prediction = model.predict(X_scaled)[0]
 
-def create_lagged_features(lettuce_df):
-    lag_features = ['Temperature', 'Humidity', 'TDS Value', 'pH Level']
-    lags = [1, 2, 3, 7]
-
-    for feature in lag_features:
-        for lag in lags:
-            lettuce_df[f"{feature} Lag {lag}"] = lettuce_df[feature].shift(lag)
-
-    window = 7
-    for feature in lag_features:
-        lettuce_df[f"{feature} Rolling Mean"] = lettuce_df[feature].rolling(window=window).mean()
-        lettuce_df[f"{feature} Rolling Std"] = lettuce_df[feature].rolling(window=window).std()
-
-    lettuce_df['Day of Week'] = lettuce_df.index.dayofweek + 1
-    lettuce_df['Month'] = lettuce_df.index.month
-
-    return lettuce_df
+        return {"predicted_harvest_day": int(prediction)}
+    
+    except Exception as e:
+        print("Error during prediction:", str(e))
+        return {"error": "Prediction failed. Check input format or model compatibility."}
