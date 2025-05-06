@@ -56,31 +56,26 @@ def predict(window: List[SensorData]):
     if not window:
         raise HTTPException(400, "Payload cannot be empty")
 
-    # 🟢 Early exit: fewer than 7 real readings
+    # 1) Hard-code 45 if fewer than 7 real readings
     if len(window) < 7:
         return {"predicted_harvest_day": 45}
 
-    # Proceed only if valid
-    df = pd.DataFrame([{
-        'Date':        datetime.strptime(r.date, "%Y-%m-%d"),
-        'Temperature': r.temperature,
-        'Humidity':    r.humidity,
-        'TDS Value':   r.tds,
-        'pH Level':    r.pH,
-    } for r in window]).sort_values('Date').reset_index(drop=True)
-
-    # 🟢 Padding (only needed if you want >=7 for lags/rolling)
+    # 2) Build + pad to at least 7 days
+    df = pd.DataFrame([...]) \
+           .sort_values("Date") \
+           .reset_index(drop=True)
     while len(df) < 7:
         first = df.iloc[0].copy()
-        first['Date'] -= timedelta(days=1)
+        first["Date"] -= timedelta(days=1)
         df = pd.concat([pd.DataFrame([first]), df], ignore_index=True)
 
-    df = df.sort_values('Date').reset_index(drop=True).tail(7)
-
-    # Featurize and predict
+    # 3) Now feature-engineer the entire history
     df = create_lagged_features(df)
 
-    last_row = df[list(preprocessor.feature_names_in_)]
+    # 4) Take only the last row for *today’s* prediction
+    last_row = df.tail(1)[list(preprocessor.feature_names_in_)]
+
+    # 5) Transform & predict
     X = preprocessor.transform(last_row)
     y = model.predict(X)
 
