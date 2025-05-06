@@ -54,7 +54,7 @@ def create_lagged_features(df: pd.DataFrame) -> pd.DataFrame:
 # ── PREDICT ENDPOINT ──────────────────────────────────────────
 
 @app.post("/predict")
-def predict(window: List\[SensorData]):
+def predict(window: List[SensorData]):
     if not window:
     raise HTTPException(400, "Payload cannot be empty")
     
