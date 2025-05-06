@@ -1,101 +1,77 @@
-import joblib
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
-from typing import List
 import pandas as pd
+import numpy as np
+import joblib
 from datetime import datetime
+from typing import List
 
-# Load preprocessor and model artifacts
-preprocessor = joblib.load('preprocessor.pkl')
-model = joblib.load('model.pkl')
+# Load your trained model
+model = joblib.load("harvest_model.pkl")
 
 app = FastAPI()
 
-class SensorData(BaseModel):
+# Pydantic schema for input
+class Reading(BaseModel):
     date: str
     temperature: float
     humidity: float
     tds: float
     pH: float
 
+class PredictionResponse(BaseModel):
+    predicted_harvest_day: int
 
-def create_lagged_features(df: pd.DataFrame) -> pd.DataFrame:
-    """
-    Given a DataFrame with at least 7 rows of chronological data,
-    compute lagged and rolling statistics, fill NaNs with sensible defaults,
-    and add time-based features.
-    """
+
+def create_lagged_features(df):
+    df = df.copy()
     lag_features = ['Temperature', 'Humidity', 'TDS Value', 'pH Level']
     lags = [1, 2, 3, 7]
-    window = 7
-
-    # Compute lag features
+    
     for feature in lag_features:
         for lag in lags:
             df[f"{feature} Lag {lag}"] = df[feature].shift(lag)
 
-    # Compute rolling statistics
+    window = 7
     for feature in lag_features:
         df[f"{feature} Rolling Mean"] = df[feature].rolling(window=window).mean()
         df[f"{feature} Rolling Std"] = df[feature].rolling(window=window).std()
 
-    # Time-based features
-    df['Day of Week'] = df['Date'].dt.dayofweek + 1  # Monday=1 .. Sunday=7
-    df['Month'] = df['Date'].dt.month
-
-    # Fill missing values:
-    for feature in lag_features:
-        for lag in lags:
-            col = f"{feature} Lag {lag}"
-            df[col].fillna(df[feature], inplace=True)
-        mean_col = f"{feature} Rolling Mean"
-        std_col = f"{feature} Rolling Std"
-        df[mean_col].fillna(df[feature], inplace=True)
-        df[std_col].fillna(0, inplace=True)
-
+    df['Day of Week'] = df.index.dayofweek + 1
+    df['Month'] = df.index.month
     return df
 
 
-@app.post("/predict")
-def predict(window: List[SensorData]):
+@app.post("/predict", response_model=PredictionResponse)
+def predict(readings: List[Reading]):
+    if len(readings) < 7:
+        return {"predicted_harvest_day": 45}
+
+    # Convert input to DataFrame
     try:
-        # 1) Build DataFrame from incoming window
-        records = []
-        for r in window:
-            records.append({
-                'Date': datetime.strptime(r.date, "%Y-%m-%d"),
-                'Temperature': r.temperature,
-                'Humidity': r.humidity,
-                'TDS Value': r.tds,
-                'pH Level': r.pH
-            })
-        df = pd.DataFrame(records)
-        df['Date'] = pd.to_datetime(df['Date'])
-        df = df.sort_values('Date').reset_index(drop=True)
+        df = pd.DataFrame([r.dict() for r in readings])
+        df['date'] = pd.to_datetime(df['date'])
+        df = df.sort_values('date')  # Ensure chronological order
+        df.set_index('date', inplace=True)
+        df.rename(columns={
+            'temperature': 'Temperature',
+            'humidity': 'Humidity',
+            'tds': 'TDS Value',
+            'pH': 'pH Level'
+        }, inplace=True)
 
-        # 2) Pad if fewer than 7 days
-        if len(df) < 7:
-            first_row = df.iloc[0]
-            while len(df) < 7:
-                new_row = first_row.copy()
-                new_row['Date'] = new_row['Date'] - pd.Timedelta(days=1)
-                df = pd.concat([pd.DataFrame([new_row]), df], ignore_index=True)
-            df = df.sort_values('Date').reset_index(drop=True)
+        # Feature engineering
+        df_feat = create_lagged_features(df)
+        df_feat = df_feat.dropna()
 
-        # 3) Feature engineering
-        feats = create_lagged_features(df)
+        if df_feat.empty:
+            raise ValueError("Not enough data after feature processing.")
 
-        # 4) Select the last fully populated row
-        last = feats.dropna().tail(1)
-        if last.empty:
-            raise HTTPException(status_code=400, detail="Insufficient data to compute features")
+        # Prepare model input (drop target column if any)
+        latest_row = df_feat.iloc[[-1]]  # Only last day
+        X = latest_row  # Ensure features match training
+        prediction = model.predict(X)[0]
+        return {"predicted_harvest_day": round(float(prediction))}
 
-        # 5) Preprocess and predict
-        X = preprocessor.transform(last)
-        y = model.predict(X)
-        return {"predicted_harvest_day": int(y[0])}
-
-    except HTTPException:
-        raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e))
