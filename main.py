@@ -42,35 +42,31 @@ def create_lagged_features(df: pd.DataFrame) -> pd.DataFrame:
 @app.post("/predict")
 def predict(window: List[SensorData]):
     if not window:
-        raise HTTPException(400, "Payload cannot be empty")
+        raise HTTPException(400, "No data provided")
 
-    # Hard-code 45 if fewer than 7 real readings
-    if len(window) < 7:
-        return {"predicted_harvest_day": 45}
-
-    # Build DataFrame from the incoming payload
+    # 1) Build & sort
     df = pd.DataFrame([{
-        'Date':        datetime.strptime(r.date, "%Y-%m-%d"),
-        'Temperature': r.temperature,
-        'Humidity':    r.humidity,
-        'TDS Value':   r.tds,
-        'pH Level':    r.pH,
-    } for r in window])
+        "Date":        datetime.strptime(r.date, "%Y-%m-%d"),
+        "Temperature": r.temperature,
+        "Humidity":    r.humidity,
+        "TDS Value":   r.tds,
+        "pH Level":    r.pH
+    } for r in window]).sort_values("Date").reset_index(drop=True)
 
-    # Sort ascending and pad backwards if needed
-    df = df.sort_values('Date').reset_index(drop=True)
-    while len(df) < 7:
-        first = df.iloc[0].copy()
-        first['Date'] -= timedelta(days=1)
-        df = pd.concat([pd.DataFrame([first]), df], ignore_index=True)
+    # 2) Pad so shift(7) has real values
+    df = pad_to_minimum(df)
 
-    # Feature‐engineer the full history
-    df = create_lagged_features(df)
+    # 3) Create lags + rolls (leave NaNs!)
+    df_feat = create_lagged_features(df)
 
-    # Pick only the very last row (today’s features)
-    last_row = df.tail(1)[list(preprocessor.feature_names_in_)]
+    # 4) Drop the first 7 rows (incomplete windows)
+    df_clean = df_feat.dropna().reset_index(drop=True)
 
-    # Preprocess & predict
+    # 5) Take the last row only
+    cols     = list(preprocessor.feature_names_in_)
+    last_row = df_clean.tail(1)[cols]
+
+    # 6) Transform & predict
     X = preprocessor.transform(last_row)
     y = model.predict(X)
 
