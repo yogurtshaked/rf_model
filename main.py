@@ -1,8 +1,9 @@
 from fastapi import FastAPI, HTTPException
-from typing  import List
+from typing import List
 from pydantic import BaseModel
 import joblib, pandas as pd
-from datetime import datetime, timedelta
+from datetime import datetime
+from features import pad_to_minimum, create_lagged_features
 
 preprocessor = joblib.load('preprocessor.pkl')
 model        = joblib.load('model.pkl')
