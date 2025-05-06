@@ -44,8 +44,8 @@ def create_lagged_features(df: pd.DataFrame) -> pd.DataFrame:
         roll_mean = f"{f} Rolling Mean"
         roll_std  = f"{f} Rolling Std"
 
-        df[roll_mean] = df[roll_mean].fillna(df[f])     # mean → raw value
-        df[roll_std]  = df[roll_std].fillna(0)          # std  → 0
+        df = df.dropna(subset=[roll_mean])
+        df = df.dropna(subset=[roll_std])         # std  → 0
 
     return df
 
