@@ -16,7 +16,7 @@ class SensorData(BaseModel):
     temperature: float
     humidity: float
     tds: float
-    ph: float
+    pH: float
 
 
 def create_lagged_features(df: pd.DataFrame) -> pd.DataFrame:
@@ -67,7 +67,7 @@ def predict(window: List[SensorData]):
                 'Temperature': r.temperature,
                 'Humidity': r.humidity,
                 'TDS Value': r.tds,
-                'pH Level': r.ph
+                'pH Level': r.pH
             })
         df = pd.DataFrame(records)
         df['Date'] = pd.to_datetime(df['Date'])
