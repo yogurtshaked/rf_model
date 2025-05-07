@@ -15,7 +15,7 @@ class SensorData(BaseModel):
     temperature: float
     humidity:    float
     tds:         float
-    pH:          float
+    ph:          float
 
 # ── feature‑engineering helper ────────────────────────────────
 def create_lagged_features(df: pd.DataFrame) -> pd.DataFrame:
@@ -66,7 +66,7 @@ def predict(window: List[SensorData]):
         'Temperature': r.temperature,
         'Humidity':    r.humidity,
         'TDS Value':   r.tds,
-        'pH Level':    r.pH,
+        'pH Level':    r.ph,
     } for r in window]).sort_values('Date').reset_index(drop=True)
 
     # 🟢 Padding (only needed if you want >=7 for lags/rolling)
