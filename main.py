@@ -130,3 +130,4 @@ def predict_nutrients(data: SensorData) -> Dict:
 
     print("Prediction Results:", results)  # Log the final results for debugging
     return results
+
