@@ -106,40 +106,33 @@ def predict_nutrients(data: SensorData) -> Dict:
         clean_var = variable.replace(" (°C)", "").replace(" (%)", "").replace(" Value (ppm)", "").replace(" Level", "")
         low, high = normal_ranges[clean_var.lower()]
 
-        # For Temperature and Humidity, no adjustment is needed, only status
-        if clean_var in ['Temperature', 'Humidity']:
-            status = "Normal" if low <= pred <= high else "Out of Range"
+        status = "Normal" if low <= pred <= high else "Out of Range"
+        adjustment = None
+
+        # Only include adjustments for abnormal values
+        if clean_var == 'TDS Value' and status == "Out of Range":
+            if pred < low:
+                adjustment = f"Increase by {low - pred:.2f}"
+            elif pred > high:
+                adjustment = f"Decrease by {pred - high:.2f}"
+
+        if clean_var == 'pH' and status == "Out of Range":
+            if pred < low:
+                adjustment = f"Increase by {low - pred:.2f}"
+            elif pred > high:
+                adjustment = f"Decrease by {pred - high:.2f}"
+
+        # Only include the adjustment for TDS and pH if out of range
+        if adjustment or status == "Out of Range":
             results[clean_var] = {
                 "predicted_value": round(pred, 2),
                 "status": status,
-                "ph_adjustment": None,  # No adjustment for Temperature and Humidity
-                "tds_adjustment": None, # No adjustment for Temperature and Humidity
+                "adjustment": adjustment,  # Include adjustment only if abnormal
             }
-        else:  # For TDS and pH, check if they are in range
-            status = "Normal" if low <= pred <= high else "Out of Range"
-            ph_adjustment = None
-            tds_adjustment = None
 
-            # Adjustments for TDS and pH only
-            if clean_var == 'TDS Value':
-                if pred < low:
-                    tds_adjustment = f"Increase by {low - pred:.2f}"
-                elif pred > high:
-                    tds_adjustment = f"Decrease by {pred - high:.2f}"
-
-            if clean_var == 'pH':
-                if pred < low:
-                    ph_adjustment = f"Increase by {low - pred:.2f}"
-                elif pred > high:
-                    ph_adjustment = f"Decrease by {pred - high:.2f}"
-
-            results[clean_var] = {
-                "predicted_value": round(pred, 2),
-                "status": status,
-                "ph_adjustment": ph_adjustment,  # Only for pH
-                "tds_adjustment": tds_adjustment, # Only for TDS
-            }
+    # If no abnormal values are found, return only status for all
+    if not results:  # If no nutrient is out of range
+        results = { "status": "Normal" }
 
     return results
-
 
