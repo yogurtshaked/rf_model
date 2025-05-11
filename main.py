@@ -137,9 +137,7 @@ def predict_nutrients(data: SensorData) -> Dict:
                 "status": status,
             }
 
-    if not results:  # If no nutrient is out of range
-        results = { "status": "Normal" }
-
+    print("Prediction Results:", results)  # Add this line for debugging
     return results
 
 
