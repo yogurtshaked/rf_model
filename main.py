@@ -1,7 +1,7 @@
 from fastapi import FastAPI, HTTPException
+from typing import List
 from pydantic import BaseModel
-import joblib
-import pandas as pd
+import joblib, pandas as pd
 from datetime import datetime, timedelta
 from typing import Dict
 
