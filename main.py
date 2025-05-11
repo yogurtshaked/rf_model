@@ -106,35 +106,43 @@ def predict_nutrients(data: SensorData) -> Dict:
         clean_var = variable.replace(" (°C)", "").replace(" (%)", "").replace(" Value (ppm)", "").replace(" Level", "")
         low, high = normal_ranges[clean_var.lower()]
 
-        print(f"Prediction for {clean_var}: {pred}")  # Log prediction for debugging
+        # Log prediction and range values for debugging
+        print(f"Predicting {clean_var}: Predicted value = {pred:.2f}, Low = {low}, High = {high}")
 
+        # Check if the predicted value is out of range
         status = "Normal" if low <= pred <= high else "Out of Range"
-        ph_adjustment = None
-        tds_adjustment = None
+        
+        print(f"{clean_var}: {pred:.2f} is {status}")  # Log status check for debugging
 
-        # Only include adjustments for abnormal values
+        adjustment = None  # No adjustment for Temperature and Humidity
+
+        # Handle adjustments for TDS and pH
         if clean_var == 'TDS Value' and status == "Out of Range":
             if pred < low:
-                tds_adjustment = f"Increase by {low - pred:.2f}"
+                adjustment = f"Increase by {low - pred:.2f}"
             elif pred > high:
-                tds_adjustment = f"Decrease by {pred - high:.2f}"
+                adjustment = f"Decrease by {pred - high:.2f}"
 
         if clean_var == 'pH' and status == "Out of Range":
             if pred < low:
-                ph_adjustment = f"Increase by {low - pred:.2f}"
+                adjustment = f"Increase by {low - pred:.2f}"
             elif pred > high:
-                ph_adjustment = f"Decrease by {pred - high:.2f}"
+                adjustment = f"Decrease by {pred - high:.2f}"
 
-        # Only include the adjustment for TDS and pH if out of range
+        # For temperature and humidity, no adjustments, just status
+        if clean_var == 'Temperature' or clean_var == 'Humidity':
+            adjustment = None  # No adjustment
+
+        # Only include the adjustment for TDS or pH if out of range
         if status == "Out of Range":
             results[clean_var] = {
                 "predicted_value": round(pred, 2),
                 "status": status,
-                "ph_adjustment": ph_adjustment,  # Only for pH
-                "tds_adjustment": tds_adjustment, # Only for TDS
+                "adjustment": adjustment,  # Include adjustment for TDS and pH only
             }
         else:
             results[clean_var] = {
+                "predicted_value": round(pred, 2),
                 "status": status,
             }
 
