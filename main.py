@@ -123,7 +123,7 @@ def predict_nutrients(data: SensorData) -> Dict:
 
         # Only include the adjustment for TDS and pH if out of range
         results[clean_var] = {
-            "predicted_value": value,  # Use the actual input value, not predicted
+            "value": value,  # Use the actual input value, not predicted
             "status": status,
             "adjustment": adjustment,  # Only for TDS and pH
         }
