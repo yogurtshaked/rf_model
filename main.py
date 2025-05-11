@@ -106,6 +106,8 @@ def predict_nutrients(data: SensorData) -> Dict:
         clean_var = variable.replace(" (°C)", "").replace(" (%)", "").replace(" Value (ppm)", "").replace(" Level", "")
         low, high = normal_ranges[clean_var.lower()]
 
+        print(f"Prediction for {clean_var}: {pred}")  # Log prediction for debugging
+
         status = "Normal" if low <= pred <= high else "Out of Range"
         ph_adjustment = None
         tds_adjustment = None
@@ -137,7 +139,5 @@ def predict_nutrients(data: SensorData) -> Dict:
                 "status": status,
             }
 
-    print("Prediction Results:", results)  # Add this line for debugging
+    print("Prediction Results:", results)  # Log the final results for debugging
     return results
-
-
