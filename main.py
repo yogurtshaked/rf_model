@@ -103,7 +103,7 @@ def predict_nutrients(data: SensorData) -> Dict:
     # Predict for each nutrient using the models
     for variable, model in nutrient_model.items():
         pred = model.predict(input_df)[0]
-        clean_var = variable.replace(" (°C)", "").replace(" (%)", "").replace(" (ppm)", "").replace(" Level", "")
+        clean_var = variable.replace(" (°C)", "").replace(" (%)", "").replace(" Value (ppm)", "").replace(" Level", "")
         low, high = normal_ranges[clean_var.lower()]
 
         status = "Normal" if low <= pred <= high else "Out of Range"
