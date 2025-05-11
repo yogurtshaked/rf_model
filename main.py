@@ -14,10 +14,10 @@ app = FastAPI()
 
 # Normal range for variables
 normal_ranges = {
-    'Temperature': (18, 24),
-    'Humidity': (50, 70),
-    'TDS Value': (500, 1000),
-    'pH Level': (5.5, 6.5)
+    'temperature': (18, 24),
+    'humidity': (50, 70),
+    'tds value': (500, 1000),
+    'ph level': (5.5, 6.5)
 }
 
 # Model Input Data
@@ -104,8 +104,7 @@ def predict_nutrients(data: SensorData) -> Dict:
     for variable, model in nutrient_model.items():
         pred = model.predict(input_df)[0]
         clean_var = variable.replace(" (°C)", "").replace(" (%)", "").replace(" (ppm)", "").replace(" Level", "")
-        low, high = normal_ranges[clean_var]
-
+        low, high = normal_ranges[clean_var.lower()]
 
         status = "Normal" if low <= pred <= high else "Out of Range"
         adjustment = None
