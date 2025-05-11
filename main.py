@@ -107,32 +107,39 @@ def predict_nutrients(data: SensorData) -> Dict:
         low, high = normal_ranges[clean_var.lower()]
 
         status = "Normal" if low <= pred <= high else "Out of Range"
-        adjustment = None
+        ph_adjustment = None
+        tds_adjustment = None
 
         # Only include adjustments for abnormal values
         if clean_var == 'TDS Value' and status == "Out of Range":
             if pred < low:
-                adjustment = f"Increase by {low - pred:.2f}"
+                tds_adjustment = f"Increase by {low - pred:.2f}"
             elif pred > high:
-                adjustment = f"Decrease by {pred - high:.2f}"
+                tds_adjustment = f"Decrease by {pred - high:.2f}"
 
         if clean_var == 'pH' and status == "Out of Range":
             if pred < low:
-                adjustment = f"Increase by {low - pred:.2f}"
+                ph_adjustment = f"Increase by {low - pred:.2f}"
             elif pred > high:
-                adjustment = f"Decrease by {pred - high:.2f}"
+                ph_adjustment = f"Decrease by {pred - high:.2f}"
 
         # Only include the adjustment for TDS and pH if out of range
-        if adjustment or status == "Out of Range":
+        if status == "Out of Range":
             results[clean_var] = {
                 "predicted_value": round(pred, 2),
                 "status": status,
-                "adjustment": adjustment,  # Include adjustment only if abnormal
+                "ph_adjustment": ph_adjustment,  # Only for pH
+                "tds_adjustment": tds_adjustment, # Only for TDS
+            }
+        else:
+            results[clean_var] = {
+                "predicted_value": round(pred, 2),
+                "status": status,
             }
 
-    # If no abnormal values are found, return only status for all
     if not results:  # If no nutrient is out of range
         results = { "status": "Normal" }
 
     return results
+
 
