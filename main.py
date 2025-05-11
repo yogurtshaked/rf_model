@@ -112,24 +112,34 @@ def predict_nutrients(data: SensorData) -> Dict:
             results[clean_var] = {
                 "predicted_value": round(pred, 2),
                 "status": status,
-                "adjustment": None  # No adjustment for Temperature and Humidity
+                "ph_adjustment": None,  # No adjustment for Temperature and Humidity
+                "tds_adjustment": None, # No adjustment for Temperature and Humidity
             }
         else:  # For TDS and pH, check if they are in range
             status = "Normal" if low <= pred <= high else "Out of Range"
-            adjustment = None
+            ph_adjustment = None
+            tds_adjustment = None
 
             # Adjustments for TDS and pH only
-            if clean_var in ['TDS Value', 'pH']:
+            if clean_var == 'TDS Value':
                 if pred < low:
-                    adjustment = f"Increase by {low - pred:.2f}"
+                    tds_adjustment = f"Increase by {low - pred:.2f}"
                 elif pred > high:
-                    adjustment = f"Decrease by {pred - high:.2f}"
+                    tds_adjustment = f"Decrease by {pred - high:.2f}"
+
+            if clean_var == 'pH':
+                if pred < low:
+                    ph_adjustment = f"Increase by {low - pred:.2f}"
+                elif pred > high:
+                    ph_adjustment = f"Decrease by {pred - high:.2f}"
 
             results[clean_var] = {
                 "predicted_value": round(pred, 2),
                 "status": status,
-                "adjustment": adjustment  # Only set if out of range
+                "ph_adjustment": ph_adjustment,  # Only for pH
+                "tds_adjustment": tds_adjustment, # Only for TDS
             }
 
     return results
+
 
