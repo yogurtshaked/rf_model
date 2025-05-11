@@ -3,12 +3,23 @@ from typing import List
 from pydantic import BaseModel
 import joblib, pandas as pd
 from datetime import datetime, timedelta
+from typing import Dict
+
+# Load the nutrient model (dictionary of 4 RandomForestRegressors)
+nutrient_model = joblib.load("nutrient_model.pkl")
 
 # ── load artifacts ────────────────────────────────────────────
 preprocessor = joblib.load('preprocessor.pkl')
 model        = joblib.load('model.pkl')
 
 app = FastAPI()
+
+normal_ranges = {
+    'Temperature': (18, 24),
+    'Humidity': (50, 70),
+    'TDS Value': (500, 1000),
+    'pH Level': (5.5, 6.5)
+}
 
 class SensorData(BaseModel):
     date: str          # 'YYYY-MM-DD'
@@ -51,7 +62,7 @@ def create_lagged_features(df: pd.DataFrame) -> pd.DataFrame:
 
 
 # ── PREDICT ENDPOINT ──────────────────────────────────────────
-@app.post("/predict")
+@app.post("/predict-harvest")
 def predict(window: List[SensorData]):
     if not window:
         raise HTTPException(400, "Payload cannot be empty")
@@ -85,3 +96,40 @@ def predict(window: List[SensorData]):
     y = model.predict(X)
 
     return {"predicted_harvest_day": int(y[0])}
+
+@app.post("/predict-nutrients")
+def predict_nutrients(data: SensorData) -> Dict:
+    # Prepare input row
+    input_df = pd.DataFrame([{
+        'Temperature (°C)': data.temperature,
+        'Humidity (%)': data.humidity,
+        'TDS Value (ppm)': data.tds,
+        'pH Level': data.ph
+    }])
+
+    results = {}
+
+    for variable, model in nutrient_model.items():
+        pred = model.predict(input_df)[0]
+        clean_var = variable.replace(" (°C)", "").replace(" (%)", "").replace(" (ppm)", "").replace(" Level", "")
+        low, high = normal_ranges[clean_var]
+
+        status = "Normal" if low <= pred <= high else "Out of Range"
+        adjustment = None
+
+        if clean_var in ['TDS Value', 'pH']:
+            if pred < low:
+                adjustment = f"Increase by {low - pred:.2f}"
+            elif pred > high:
+                adjustment = f"Decrease by {pred - high:.2f}"
+            else:
+                adjustment = "No adjustment needed"
+
+        results[clean_var] = {
+            "predicted_value": round(pred, 2),
+            "status": status,
+            "adjustment": adjustment
+        }
+
+    return results
+
