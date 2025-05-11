@@ -135,7 +135,6 @@ def predict_nutrients(data: SensorData) -> Dict:
             }
         else:
             results[clean_var] = {
-                "predicted_value": round(pred, 2),
                 "status": status,
             }
 
