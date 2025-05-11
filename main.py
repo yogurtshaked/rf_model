@@ -96,10 +96,10 @@ def predict_nutrients(data: SensorData) -> Dict:
     for clean_var, value in {
         'Temperature (°C)': data.temperature,
         'Humidity (%)': data.humidity,
-        'TDS Value (ppm)': data.tds,
+        'TDS Value': data.tds,
         'pH Level': data.ph
     }.items():
-        low, high = normal_ranges[clean_var.replace(" (°C)", "").replace(" (%)", "").replace(" Value (ppm)", "").replace(" Level", "").lower()]
+        low, high = normal_ranges[clean_var.replace(" (°C)", "").replace(" (%)", "").replace(" Value", "").replace(" Level", "").lower()]
 
         # Check if the input value is within the normal range
         status = "Normal" if low <= value <= high else "Out of Range"
@@ -109,7 +109,7 @@ def predict_nutrients(data: SensorData) -> Dict:
 
         # Define adjustments only for TDS and pH
         adjustment = None
-        if clean_var == 'TDS Value (ppm)' and status == "Out of Range":
+        if clean_var == 'TDS Value' and status == "Out of Range":
             if value < low:
                 adjustment = f"Increase by {low - value:.2f}"
             elif value > high:
