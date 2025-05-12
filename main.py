@@ -132,15 +132,15 @@ def predict_nutrients(data: SensorData) -> Dict:
         adjustment = None
         if clean_var == 'TDS Value' and status == "Out of Range":
             if value < low:
-                adjustment = f"Increase by {low - value:.2f}"
+                adjustment = f"Increase TDS by {low - value:.2f}"
             elif value > high:
-                adjustment = f"Decrease by {value - high:.2f}"
+                adjustment = f"Decrease TDS by {value - high:.2f}"
 
         if clean_var == 'pH Level' and status == "Out of Range":
             if value < low:
-                adjustment = f"Increase by {low - value:.2f}"
+                adjustment = f"Increase pH by {low - value:.2f}"
             elif value > high:
-                adjustment = f"Decrease by {value - high:.2f}"
+                adjustment = f"Decrease pH by {value - high:.2f}"
 
         # Only include the adjustment for TDS and pH if out of range
         results[clean_var] = {
