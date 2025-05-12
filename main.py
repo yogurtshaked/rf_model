@@ -93,16 +93,9 @@ def predict_harvest(window: List[SensorData]):
     # 6. Feature engineering
     df = create_lagged_features(df)
 
-    # 7. Extract exactly the one row you want to predict on:
-    last_row = df[list(preprocessor.feature_names_in_)].tail(1)
-
-    # 8. Transform to the scaled feature matrix:
-    X = preprocessor.transform(last_row)   # shape (1, N_features)
-
-    # 9. Zero out the standardized “Month” column so its effect is neutral:
-    feat_names = preprocessor.get_feature_names_out()
-    month_idx = list(feat_names).index("feature_pipeline__Month")
-    X[0, month_idx] = 0.0
+    # 7. Input to model
+    last_row = df[list(preprocessor.feature_names_in_)]
+    X = preprocessor.transform(last_row)
 
     print("\n=== Model Input After Preprocessing ===")
     print(pd.DataFrame(X, columns=preprocessor.get_feature_names_out()))
