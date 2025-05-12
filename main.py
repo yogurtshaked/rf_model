@@ -8,7 +8,7 @@ from typing import Dict
 # Load the models
 nutrient_model = joblib.load("nutrient_model.pkl")  # Dictionary of 4 RandomForestRegressors
 preprocessor = joblib.load('preprocessor.pkl')
-model = joblib.load('harvest_model.pkl')
+harvest_model = joblib.load('harvest_model.pkl')
 
 app = FastAPI()
 
@@ -83,7 +83,7 @@ def predict_harvest(window: List[SensorData]):
     df = create_lagged_features(df)
     last_row = df[list(preprocessor.feature_names_in_)]
     X = preprocessor.transform(last_row)
-    y = model.predict(X)
+    y = harvest_model.predict(X)
 
     return {"predicted_harvest_day": int(y[0])}
 
