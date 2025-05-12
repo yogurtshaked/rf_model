@@ -31,39 +31,29 @@ class SensorData(BaseModel):
 
 # Helper function for feature engineering
 def create_lagged_features(df: pd.DataFrame) -> pd.DataFrame:
-    # 1. core lag & rolling statistics (same as before)
+    # Ensure datetime & sort
+    df['Date'] = pd.to_datetime(df['Date'])
+    df = df.sort_values('Date')
+
     lag_feats = ['Temperature', 'Humidity', 'TDS Value', 'pH Level']
-    lags      = [1, 2, 3, 7]
-    window    = 7
+    lags = [1, 2, 3, 7]
 
-    for feat in lag_feats:
+    # 1) Lag features
+    for f in lag_feats:
         for lag in lags:
-            df[f"{feat} Lag {lag}"] = df[feat].shift(lag)
-        df[f"{feat} Rolling Mean"] = df[feat].rolling(window).mean()
-        df[f"{feat} Rolling Std"]  = df[feat].rolling(window).std()
+            df[f"{f} Lag {lag}"] = df[f].shift(lag)
 
-    # Fill any NaNs from the head of the window
-    for feat in lag_feats:
-        for lag in lags:
-            col = f"{feat} Lag {lag}"
-            df[col] = df[col].fillna(df[feat])
-        df[f"{feat} Rolling Mean"] = df[f"{feat} Rolling Mean"].fillna(df[feat])
-        df[f"{feat} Rolling Std"]  = df[f"{feat} Rolling Std"].fillna(0.0)
+    # 2) Rolling stats
+    window = 7
+    for f in lag_feats:
+        df[f"{f} Rolling Mean"] = df[f].rolling(window).mean()
+        df[f"{f} Rolling Std"]  = df[f].rolling(window).std()
 
-    # 2. cyclical Day-of-Week (0–6)
-    dow = df['Date'].dt.dayofweek
-    df['dow_sin'] = np.sin(2 * np.pi * dow / 7)
-    df['dow_cos'] = np.cos(2 * np.pi * dow / 7)
-
-    # 3. cyclical Month (1–12)
-    month = df['Date'].dt.month
-    df['month_sin'] = np.sin(2 * np.pi * month / 12)
-    df['month_cos'] = np.cos(2 * np.pi * month / 12)
-
-    # 4. drop the old linear columns if they exist
-    for col in ['Day of Week', 'Month']:
-        if col in df.columns:
-            df = df.drop(columns=[col])
+    # 3) Time-based features from the actual date index
+    df.set_index('Date', inplace=True)
+    df['Day of Week'] = df.index.dayofweek + 1
+    df['Month']       = df.index.month
+    df.reset_index(inplace=True)
 
     return df
 
@@ -105,10 +95,19 @@ def predict_harvest(window: List[SensorData]):
     print(df)
 
     # 6. Feature engineering
+    # Create lag & rolling features
     df = create_lagged_features(df)
 
+    # **Neutralize the Month feature** so standardized-month = 0
+    # (Assuming your training data spanned all months evenly,
+    #  the mean month is ~6.5 → scaled to zero by your StandardScaler.)
+    df['Month'] = 6.5
+
+    # Select only the features the preprocessor expects
+    feats = list(preprocessor.feature_names_in_)
+    last_row = df[feats]
+
     # 7. Input to model
-    last_row = df[list(preprocessor.feature_names_in_)]
     X = preprocessor.transform(last_row)
 
     print("\n=== Model Input After Preprocessing ===")
