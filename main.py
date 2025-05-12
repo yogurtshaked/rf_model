@@ -58,11 +58,17 @@ def predict_harvest(window: List[SensorData]):
     if not window:
         raise HTTPException(400, "Payload cannot be empty")
 
-    # Check if there are fewer than 7 readings (handle edge case)
+    # 1. Log original input data
+    print("=== Incoming Sensor Data ===")
+    for record in window:
+        print(record.dict())
+
+    # 2. Handle fewer than 7 readings (edge case)
     if len(window) < 7:
+        print("Insufficient data (<7). Returning default value: 45")
         return {"predicted_harvest_day": 45}
 
-    # Prepare the DataFrame for feature engineering
+    # 3. Prepare the DataFrame
     df = pd.DataFrame([{
         'Date': datetime.strptime(r.date, "%Y-%m-%d"),
         'Temperature': r.temperature,
@@ -71,7 +77,7 @@ def predict_harvest(window: List[SensorData]):
         'pH Level': r.ph,
     } for r in window]).sort_values('Date').reset_index(drop=True)
 
-    # Pad the data with the first day's data (if fewer than 7 days of data)
+    # 4. Pad the DataFrame
     while len(df) < 7:
         first = df.iloc[0].copy()
         first['Date'] -= timedelta(days=1)
@@ -79,14 +85,28 @@ def predict_harvest(window: List[SensorData]):
 
     df = df.sort_values('Date').reset_index(drop=True).tail(7)
 
-    # Feature engineering and prediction
+    # 5. Log the padded DataFrame
+    print("\n=== Final 7-Day DataFrame ===")
+    print(df)
+
+    # 6. Feature engineering
     df = create_lagged_features(df)
+
+    # 7. Input to model
     last_row = df[list(preprocessor.feature_names_in_)]
     X = preprocessor.transform(last_row)
+
+    print("\n=== Model Input After Preprocessing ===")
+    print(pd.DataFrame(X, columns=preprocessor.get_feature_names_out()))
+
+    # 8. Predict
     y = harvest_model.predict(X)
 
-    print("Harvest Day Prediction:", int(y[0]))
+    print("\n=== Harvest Day Prediction ===")
+    print(int(y[0]))
+
     return {"predicted_harvest_day": int(y[0])}
+
 
 # Nutrient Prediction Endpoint
 @app.post("/predict-nutrient")
