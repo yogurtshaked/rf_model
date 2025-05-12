@@ -42,7 +42,7 @@ def create_lagged_features(df: pd.DataFrame) -> pd.DataFrame:
         df[f"{f} Rolling Std"] = df[f].rolling(window).std()
 
     df['Day of Week'] = df['Date'].dt.dayofweek + 1
-    df['Month'] = 0.0   # ← force month to match your notebook
+    df['Month'] = 1.0   # ← force month to match your notebook
 
     for f in lag_feats:
         for lag in lags:
