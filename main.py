@@ -31,33 +31,29 @@ class SensorData(BaseModel):
 
 # Helper function for feature engineering
 def create_lagged_features(df: pd.DataFrame) -> pd.DataFrame:
-    # Ensure datetime & sort
-    df['Date'] = pd.to_datetime(df['Date'])
-    df = df.sort_values('Date')
-
     lag_feats = ['Temperature', 'Humidity', 'TDS Value', 'pH Level']
     lags = [1, 2, 3, 7]
+    window = 7
 
-    # 1) Lag features
     for f in lag_feats:
         for lag in lags:
             df[f"{f} Lag {lag}"] = df[f].shift(lag)
-
-    # 2) Rolling stats
-    window = 7
-    for f in lag_feats:
         df[f"{f} Rolling Mean"] = df[f].rolling(window).mean()
-        df[f"{f} Rolling Std"]  = df[f].rolling(window).std()
+        df[f"{f} Rolling Std"] = df[f].rolling(window).std()
 
-    # 3) Time-based features from the actual date index
-    df.set_index('Date', inplace=True)
-    df['Day of Week'] = df.index.dayofweek + 1
-    df['Month']       = df.index.month
-    df.reset_index(inplace=True)
+    df['Day of Week'] = df['Date'].dt.dayofweek + 1
+    df['Month'] = df['Date'].dt.month
+
+    for f in lag_feats:
+        for lag in lags:
+            col = f"{f} Lag {lag}"
+            df[col] = df[col].fillna(df[f])
+        df[f"{f} Rolling Mean"] = df[f"{f} Rolling Mean"].fillna(df[f])
+        df[f"{f} Rolling Std"] = df[f"{f} Rolling Std"].fillna(0)
 
     return df
 
-# Harvest Day Prediction Endpoint
+
 @app.post("/predict-harvest")
 def predict_harvest(window: List[SensorData]):
     if not window:
@@ -95,18 +91,10 @@ def predict_harvest(window: List[SensorData]):
     print(df)
 
     # 6. Feature engineering
-    # Create lag & rolling features
     df = create_lagged_features(df)
 
-    # **Neutralize the Month feature** so standardized-month = 0
-    # (Assuming your training data spanned all months evenly,
-    #  the mean month is ~6.5 → scaled to zero by your StandardScaler.)
-    df['Month'] = 6.5
-
-    # Select only the features the preprocessor expects
-    last_row = df[list(preprocessor.feature_names_in_)]
-
     # 7. Input to model
+    last_row = df[list(preprocessor.feature_names_in_)]
     X = preprocessor.transform(last_row)
 
     print("\n=== Model Input After Preprocessing ===")
@@ -119,8 +107,7 @@ def predict_harvest(window: List[SensorData]):
     print(int(y[0]))
 
     return {"predicted_harvest_day": int(y[0])}
-
-
+    
 # Nutrient Prediction Endpoint
 @app.post("/predict-nutrient")
 def predict_nutrients(data: SensorData) -> Dict:
