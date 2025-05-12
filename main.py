@@ -104,8 +104,7 @@ def predict_harvest(window: List[SensorData]):
     df['Month'] = 6.5
 
     # Select only the features the preprocessor expects
-    feats = list(preprocessor.feature_names_in_)
-    last_row = df[feats]
+    last_row = df[list(preprocessor.feature_names_in_)]
 
     # 7. Input to model
     X = preprocessor.transform(last_row)
