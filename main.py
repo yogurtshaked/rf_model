@@ -30,25 +30,39 @@ class SensorData(BaseModel):
 
 # Helper function for feature engineering
 def create_lagged_features(df: pd.DataFrame) -> pd.DataFrame:
+    # 1. core lag & rolling statistics (same as before)
     lag_feats = ['Temperature', 'Humidity', 'TDS Value', 'pH Level']
-    lags = [1, 2, 3, 7]
-    window = 7
+    lags      = [1, 2, 3, 7]
+    window    = 7
 
-    for f in lag_feats:
+    for feat in lag_feats:
         for lag in lags:
-            df[f"{f} Lag {lag}"] = df[f].shift(lag)
-        df[f"{f} Rolling Mean"] = df[f].rolling(window).mean()
-        df[f"{f} Rolling Std"] = df[f].rolling(window).std()
+            df[f"{feat} Lag {lag}"] = df[feat].shift(lag)
+        df[f"{feat} Rolling Mean"] = df[feat].rolling(window).mean()
+        df[f"{feat} Rolling Std"]  = df[feat].rolling(window).std()
 
-    df['Day of Week'] = df['Date'].dt.dayofweek + 1
-    df['Month'] = df['Date'].dt.month
-
-    for f in lag_feats:
+    # Fill any NaNs from the head of the window
+    for feat in lag_feats:
         for lag in lags:
-            col = f"{f} Lag {lag}"
-            df[col] = df[col].fillna(df[f])
-        df[f"{f} Rolling Mean"] = df[f"{f} Rolling Mean"].fillna(df[f])
-        df[f"{f} Rolling Std"] = df[f"{f} Rolling Std"].fillna(0)
+            col = f"{feat} Lag {lag}"
+            df[col] = df[col].fillna(df[feat])
+        df[f"{feat} Rolling Mean"] = df[f"{feat} Rolling Mean"].fillna(df[feat])
+        df[f"{feat} Rolling Std"]  = df[f"{feat} Rolling Std"].fillna(0.0)
+
+    # 2. cyclical Day-of-Week (0–6)
+    dow = df['Date'].dt.dayofweek
+    df['dow_sin'] = np.sin(2 * np.pi * dow / 7)
+    df['dow_cos'] = np.cos(2 * np.pi * dow / 7)
+
+    # 3. cyclical Month (1–12)
+    month = df['Date'].dt.month
+    df['month_sin'] = np.sin(2 * np.pi * month / 12)
+    df['month_cos'] = np.cos(2 * np.pi * month / 12)
+
+    # 4. drop the old linear columns if they exist
+    for col in ['Day of Week', 'Month']:
+        if col in df.columns:
+            df = df.drop(columns=[col])
 
     return df
 
