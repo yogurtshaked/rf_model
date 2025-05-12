@@ -8,7 +8,7 @@ from typing import Dict
 # Load the models
 nutrient_model = joblib.load("nutrient_model.pkl")  # Dictionary of 4 RandomForestRegressors
 preprocessor = joblib.load('preprocessor.pkl')
-model = joblib.load('model.pkl')
+model = joblib.load('harvest_model.pkl')
 
 app = FastAPI()
 
