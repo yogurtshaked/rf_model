@@ -85,6 +85,7 @@ def predict_harvest(window: List[SensorData]):
     X = preprocessor.transform(last_row)
     y = harvest_model.predict(X)
 
+    print("Harvest Day Prediction:", int(y[0]))
     return {"predicted_harvest_day": int(y[0])}
 
 # Nutrient Prediction Endpoint
