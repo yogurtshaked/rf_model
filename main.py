@@ -91,7 +91,7 @@ def predict_harvest(window: List[SensorData]):
     print(df)
 
     # 6. Feature engineering
-   df = create_lagged_features(df)
+    df = create_lagged_features(df)
 
     # 7. Extract exactly the one row you want to predict on:
     last_row = df[list(preprocessor.feature_names_in_)].tail(1)
