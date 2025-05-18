@@ -9,7 +9,7 @@ import numpy as np
 # Load the models
 nutrient_model = joblib.load("nutrient_model.pkl")  # Dictionary of 4 RandomForestRegressors
 preprocessor = joblib.load('preprocessor.pkl')
-harvest_model = joblib.load('harvest_model.pkl')
+harvest_model = joblib.load('rf_model.pkl')
 
 app = FastAPI()
 
