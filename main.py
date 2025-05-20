@@ -30,82 +30,83 @@ class SensorData(BaseModel):
     ph: float
 
 # Helper function for feature engineering
-def create_lagged_features(df: pd.DataFrame) -> pd.DataFrame:
-    lag_feats = ['Temperature', 'Humidity', 'TDS Value', 'pH Level']
-    lags = [1, 2, 3, 7]
-    window = 7
+def create_features(
+    df: pd.DataFrame,
+    date_col: str       = 'Date',
+    phase_col: str      = 'Phase'
+) -> pd.DataFrame:
+    """
+    Build expanding & phase stats for a single time‐series DataFrame.
+    """
+    df = df.copy()
+    df[date_col] = pd.to_datetime(df[date_col])
+    features = ['Temperature', 'Humidity', 'TDS Value', 'pH Level']
 
-    for f in lag_feats:
-        for lag in lags:
-            df[f"{f} Lag {lag}"] = df[f].shift(lag)
-        df[f"{f} Rolling Mean"] = df[f].rolling(window).mean()
-        df[f"{f} Rolling Std"] = df[f].rolling(window).std()
+    # Single‐phase fallback (or replace with Growth‐Days logic if you add it)
+    df[phase_col] = 0
 
-    df['Day of Week'] = df['Date'].dt.dayofweek + 1
-    df['Month'] = df['Date'].dt.month
+    # 1) Expanding stats
+    for feat in features:
+        exp = df[feat].expanding(min_periods=1)
+        df[f"{feat} Expanding Mean"]   = exp.mean()
+        df[f"{feat} Expanding Std"]    = exp.std()
+        df[f"{feat} Expanding Min"]    = exp.min()
+        df[f"{feat} Expanding Max"]    = exp.max()
+        df[f"{feat} Expanding Median"] = exp.median()
 
-    for f in lag_feats:
-        for lag in lags:
-            col = f"{f} Lag {lag}"
-            df[col] = df[col].fillna(df[f])
-        df[f"{f} Rolling Mean"] = df[f"{f} Rolling Mean"].fillna(df[f])
-        df[f"{f} Rolling Std"] = df[f"{f} Rolling Std"].fillna(0)
-
+    # 2) Phase‐based summary stats (here phase is always 0, so it's just global stats)
+    agg_funcs = ['mean', 'min', 'max', 'median', 'std']
+    phase_stats = (
+        df.groupby(phase_col)[features]
+          .agg(agg_funcs)
+          .reset_index()
+    )
+    # flatten columns
+    phase_stats.columns = (
+        [phase_col] +
+        [f"{feat} Phase {stat.capitalize()}"
+         for feat, stat in phase_stats.columns
+         if feat != phase_col]
+    )
+    df = df.merge(phase_stats, on=phase_col, how='left')
     return df
 
 
 @app.post("/predict-harvest")
 def predict_harvest(window: List[SensorData]):
     if not window:
-        raise HTTPException(400, "Payload cannot be empty")
+        raise HTTPException(status_code=400, detail="Payload cannot be empty")
 
-    # 1. Log original input data
-    print("=== Incoming Sensor Data ===")
-    for record in window:
-        print(record.dict())
-
-    # 2. Handle fewer than 7 readings (edge case)
+    # 1) Early‐exit for <7 days
     if len(window) < 7:
-        print("Insufficient data (<7). Returning default value: 45")
         return {"predicted_harvest_day": 45}
 
-    # 3. Prepare the DataFrame
+    # 2) Build & sort DataFrame
     df = pd.DataFrame([{
-        'Date': datetime.strptime(r.date, "%Y-%m-%d"),
+        'Date':        datetime.strptime(r.date, "%Y-%m-%d"),
         'Temperature': r.temperature,
-        'Humidity': r.humidity,
-        'TDS Value': r.tds,
-        'pH Level': r.ph,
+        'Humidity':    r.humidity,
+        'TDS Value':   r.tds,
+        'pH Level':    r.ph,
     } for r in window]).sort_values('Date').reset_index(drop=True)
 
-    # 4. Pad the DataFrame
+    # 3) Pad backwards to ensure 7 days
     while len(df) < 7:
         first = df.iloc[0].copy()
         first['Date'] -= timedelta(days=1)
         df = pd.concat([pd.DataFrame([first]), df], ignore_index=True)
-
     df = df.sort_values('Date').reset_index(drop=True).tail(7)
 
-    # 5. Log the padded DataFrame
-    print("\n=== Final 7-Day DataFrame ===")
-    print(df)
+    # 4) Feature engineering
+    df = create_features(df)
 
-    # 6. Feature engineering
-    df = create_lagged_features(df)
-
-    # 7. Input to model
-    last_row = df[list(preprocessor.feature_names_in_)]
+    # 5) Prepare model input
+    expected = list(preprocessor.feature_names_in_)
+    last_row = df.iloc[[-1]].reindex(columns=expected, fill_value=0)
     X = preprocessor.transform(last_row)
 
-    print("\n=== Model Input After Preprocessing ===")
-    print(pd.DataFrame(X, columns=preprocessor.get_feature_names_out()))
-
-    # 8. Predict
+    # 6) Predict
     y = harvest_model.predict(X)
-
-    print("\n=== Harvest Day Prediction ===")
-    print(int(y[0]))
-
     return {"predicted_harvest_day": int(y[0])}
     
 # Nutrient Prediction Endpoint
