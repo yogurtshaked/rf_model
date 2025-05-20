@@ -112,9 +112,9 @@ def predict_harvest(window: List[SensorData]):
 
     # 6) Predict
     y = harvest_model.predict(X)
-    return {"predicted_harvest_day": int(y[0])}
     print("\n=== Harvest Day Prediction ===")
     print(int(y[0]))
+    return {"predicted_harvest_day": int(y[0])}
     
 # Nutrient Prediction Endpoint
 @app.post("/predict-nutrient")
