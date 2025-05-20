@@ -99,15 +99,22 @@ def predict_harvest(window: List[SensorData]):
 
     # 4) Feature engineering
     df = create_features(df)
+    print("\n=== Final 7-Day DataFrame ===")
+    print(df)
 
     # 5) Prepare model input
     expected = list(preprocessor.feature_names_in_)
     last_row = df.iloc[[-1]].reindex(columns=expected, fill_value=0)
     X = preprocessor.transform(last_row)
 
+    print("\n=== Model Input After Preprocessing ===")
+    print(pd.DataFrame(X, columns=preprocessor.get_feature_names_out()))
+
     # 6) Predict
     y = harvest_model.predict(X)
     return {"predicted_harvest_day": int(y[0])}
+    print("\n=== Harvest Day Prediction ===")
+    print(int(y[0]))
     
 # Nutrient Prediction Endpoint
 @app.post("/predict-nutrient")
