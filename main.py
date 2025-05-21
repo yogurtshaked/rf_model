@@ -32,17 +32,17 @@ class SensorData(BaseModel):
 # Helper function for feature engineering
 def create_features(
     df: pd.DataFrame,
-    date_col: str       = 'Date',
-    phase_col: str      = 'Phase'
+    date_col: str = 'Date',
+    phase_col: str = 'Phase'
 ) -> pd.DataFrame:
     """
-    Build expanding & phase stats for a single time‐series DataFrame.
+    Build expanding & phase stats for a single time-series DataFrame.
     """
     df = df.copy()
     df[date_col] = pd.to_datetime(df[date_col])
     features = ['Temperature', 'Humidity', 'TDS Value', 'pH Level']
 
-    # Single‐phase fallback (or replace with Growth‐Days logic if you add it)
+    # Single-phase fallback (or replace with Growth-Days logic if you add it)
     df[phase_col] = 0
 
     # 1) Expanding stats
@@ -54,7 +54,7 @@ def create_features(
         df[f"{feat} Expanding Max"]    = exp.max()
         df[f"{feat} Expanding Median"] = exp.median()
 
-    # 2) Phase‐based summary stats (here phase is always 0, so it's just global stats)
+    # 2) Phase-based summary stats (here phase is always 0, so it's just global stats)
     agg_funcs = ['mean', 'min', 'max', 'median', 'std']
     phase_stats = (
         df.groupby(phase_col)[features]
@@ -77,11 +77,7 @@ def predict_harvest(window: List[SensorData]):
     if not window:
         raise HTTPException(status_code=400, detail="Payload cannot be empty")
 
-    # 1) Early‐exit for <7 days
-    if len(window) < 7:
-        return {"predicted_harvest_day": 45}
-
-    # 2) Build & sort DataFrame
+    # 1) Build & sort DataFrame (no early exit, no padding)
     df = pd.DataFrame([{
         'Date':        datetime.strptime(r.date, "%Y-%m-%d"),
         'Temperature': r.temperature,
@@ -91,11 +87,6 @@ def predict_harvest(window: List[SensorData]):
     } for r in window]).sort_values('Date').reset_index(drop=True)
 
     # 3) Pad backwards to ensure 7 days
-    while len(df) < 7:
-        first = df.iloc[0].copy()
-        first['Date'] -= timedelta(days=1)
-        df = pd.concat([pd.DataFrame([first]), df], ignore_index=True)
-    df = df.sort_values('Date').reset_index(drop=True).tail(7)
 
     # 4) Feature engineering
     df = create_features(df)
