@@ -112,42 +112,55 @@ def predict_harvest(window: List[SensorData]):
 def predict_nutrients(data: SensorData) -> Dict:
     results = {}
 
-    # For each nutrient, we check the input values against the normal range
-    for clean_var, value in {
+    # Create a DataFrame with the input features
+    input_df = pd.DataFrame([{
         'Temperature (°C)': data.temperature,
         'Humidity (%)': data.humidity,
-        'TDS Value': data.tds,
+        'TDS Value (ppm)': data.tds,
         'pH Level': data.ph
-    }.items():
-        low, high = normal_ranges[clean_var.replace(" (°C)", "").replace(" (%)", "").replace(" Value", "").replace(" Level", "").lower()]
+    }])
 
-        # Check if the input value is within the normal range
-        status = "Normal" if low <= value <= high else "Out of Range"
-        
-        # Log status for debugging
-        print(f"{clean_var}: {value:.2f} is {status}")  # Log status check for debugging
+    # Predict each variable using its model in nutrient_model
+    predictions = {}
+    for var, model in nutrient_model.items():
+        # Predict the variable value based on input features
+        # NOTE: Make sure nutrient_model keys match features exactly as in training
+        pred_value = model.predict(input_df)[0]
+        predictions[var] = pred_value
 
-        # Define adjustments only for TDS and pH
+    # Check each variable's actual input value vs predicted and normal ranges
+    for clean_var in ['Temperature (°C)', 'Humidity (%)', 'TDS Value (ppm)', 'pH Level']:
+        actual_value = input_df[clean_var].values[0]
+        predicted_value = predictions.get(clean_var, None)
+
+        # Get normal ranges
+        key = clean_var.lower().replace(" (°c)", "").replace(" (%)", "").replace(" value (ppm)", "").replace(" level", "")
+        low, high = normal_ranges[key]
+
+        # Determine status using actual values (or you could compare with predicted)
+        status = "Normal" if low <= actual_value <= high else "Out of Range"
+
+        # Adjustment only for TDS and pH as before
         adjustment = None
-        if clean_var == 'TDS Value' and status == "Out of Range":
-            if value < low:
-                adjustment = f"Increase TDS by {low - value:.2f}"
-            elif value > high:
-                adjustment = f"Decrease TDS by {value - high:.2f}"
+        if clean_var == 'TDS Value (ppm)' and status == "Out of Range":
+            if actual_value < low:
+                adjustment = f"Increase TDS by {low - actual_value:.2f}"
+            else:
+                adjustment = f"Decrease TDS by {actual_value - high:.2f}"
+        elif clean_var == 'pH Level' and status == "Out of Range":
+            if actual_value < low:
+                adjustment = f"Increase pH by {low - actual_value:.2f}"
+            else:
+                adjustment = f"Decrease pH by {actual_value - high:.2f}"
 
-        if clean_var == 'pH Level' and status == "Out of Range":
-            if value < low:
-                adjustment = f"Increase pH by {low - value:.2f}"
-            elif value > high:
-                adjustment = f"Decrease pH by {value - high:.2f}"
-
-        # Only include the adjustment for TDS and pH if out of range
         results[clean_var] = {
-            "value": value,  # Use the actual input value, not predicted
+            "actual_value": actual_value,
+            "predicted_value": predicted_value,
             "status": status,
-            "adjustment": adjustment,  # Only for TDS and pH
+            "adjustment": adjustment,
         }
 
-    print("Prediction Results:", results)  # Log the final results for debugging
+    print("Prediction Results:", results)
     return results
+
 
