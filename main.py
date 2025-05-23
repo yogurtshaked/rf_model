@@ -114,8 +114,8 @@ def predict_nutrients(data: SensorData) -> Dict:
 
     # Create a DataFrame with the input features
     input_df = pd.DataFrame([{
-        'Temperature (°C)': data.temperature,
-        'Humidity (%)': data.humidity,
+        'Temperature': data.temperature,
+        'Humidity': data.humidity,
         'TDS Value (ppm)': data.tds,
         'pH Level': data.ph
     }])
@@ -129,12 +129,12 @@ def predict_nutrients(data: SensorData) -> Dict:
         predictions[var] = pred_value
 
     # Check each variable's actual input value vs predicted and normal ranges
-    for clean_var in ['Temperature (°C)', 'Humidity (%)', 'TDS Value (ppm)', 'pH Level']:
+    for clean_var in ['Temperature', 'Humidity', 'TDS Value (ppm)', 'pH Level']:
         actual_value = input_df[clean_var].values[0]
         predicted_value = predictions.get(clean_var, None)
 
         # Get normal ranges
-        key = clean_var.lower().replace(" (°c)", "").replace(" (%)", "").replace(" value (ppm)", "").replace(" level", "")
+        key = clean_var.lower().replace(" value (ppm)", "").replace(" level", "")
         low, high = normal_ranges[key]
 
         # Determine status using actual values (or you could compare with predicted)
