@@ -129,7 +129,7 @@ def predict_nutrients(data: SensorData) -> Dict:
         predictions[var] = pred_value
 
     # Check each variable's actual input value vs predicted and normal ranges
-    for clean_var in ['Temperature (°C)', 'Humidity (%)', 'TDS Value (ppm)', 'pH Level']:
+    for clean_var in ['Temperature (°c)', 'Humidity (%)', 'TDS Value (ppm)', 'pH Level']:
         actual_value = input_df[clean_var].values[0]
         predicted_value = predictions.get(clean_var, None)
 
