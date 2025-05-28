@@ -13,14 +13,6 @@ harvest_model = joblib.load('rf_model.pkl')
 
 app = FastAPI()
 
-# Normal range for variables
-normal_ranges = {
-    'temperature': (18, 24),
-    'humidity': (50, 70),
-    'tds': (500, 840),
-    'ph': (5.5, 6.5)
-}
-
 # Model Input Data
 class SensorData(BaseModel):
     date: str          # 'YYYY-MM-DD'
@@ -106,61 +98,6 @@ def predict_harvest(window: List[SensorData]):
     print("\n=== Harvest Day Prediction ===")
     print(int(y[0]))
     return {"predicted_harvest_day": int(y[0])}
-    
-# Nutrient Prediction Endpoint
-@app.post("/predict-nutrient")
-def predict_nutrients(data: SensorData) -> Dict:
-    results = {}
 
-    # Create a DataFrame with the input features
-    input_df = pd.DataFrame([{
-        'Temperature (°C)': data.temperature,
-        'Humidity (%)': data.humidity,
-        'TDS Value (ppm)': data.tds,
-        'pH Level': data.ph
-    }])
-
-    # Predict each variable using its model in nutrient_model
-    predictions = {}
-    for var, model in nutrient_model.items():
-        # Predict the variable value based on input features
-        # NOTE: Make sure nutrient_model keys match features exactly as in training
-        pred_value = model.predict(input_df)[0]
-        predictions[var] = pred_value
-
-    # Check each variable's actual input value vs predicted and normal ranges
-    for clean_var in ['Temperature (°C)', 'Humidity (%)', 'TDS Value (ppm)', 'pH Level']:
-        actual_value = input_df[clean_var].values[0]
-        predicted_value = predictions.get(clean_var, None)
-
-        # Get normal ranges
-        key = clean_var.lower().replace(" (°c)", "").replace(" (%)", "").replace(" value (ppm)", "").replace(" level", "")
-        low, high = normal_ranges[key]
-
-        # Determine status using actual values (or you could compare with predicted)
-        status = "Normal" if low <= actual_value <= high else "Out of Range"
-
-        # Adjustment only for TDS and pH as before
-        adjustment = None
-        if clean_var == 'TDS Value (ppm)' and status == "Out of Range":
-            if actual_value < low:
-                adjustment = f"Increase TDS by {low - actual_value:.2f}"
-            else:
-                adjustment = f"Decrease TDS by {actual_value - high:.2f}"
-        elif clean_var == 'pH Level' and status == "Out of Range":
-            if actual_value < low:
-                adjustment = f"Increase pH by {low - actual_value:.2f}"
-            else:
-                adjustment = f"Decrease pH by {actual_value - high:.2f}"
-
-        results[clean_var] = {
-            "actual_value": actual_value,
-            "predicted_value": predicted_value,
-            "status": status,
-            "adjustment": adjustment,
-        }
-
-    print("Prediction Results:", results)
-    return results
 
 
