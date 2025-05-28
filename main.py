@@ -28,38 +28,49 @@ def create_features(
     phase_col: str = 'Phase'
 ) -> pd.DataFrame:
     """
-    Build expanding & phase stats for a single time-series DataFrame.
+    Build expanding & phase stats for a single time-series DataFrame,
+    with dynamic Phase assignment based on Growth Days thresholds.
     """
     df = df.copy()
     df[date_col] = pd.to_datetime(df[date_col])
     features = ['Temperature', 'Humidity', 'TDS Value', 'pH Level']
 
-    # Single-phase fallback (or replace with Growth-Days logic if you add it)
-    df[phase_col] = 0
+    # 0) Assign phase based on Growth Days if available
+    if 'Growth Days' in df.columns:
+        gd = df['Growth Days']
+        df[phase_col] = np.where(
+            gd < 15, 0,
+            np.where(gd < 30, 1, 2)
+        ).astype(int)
+    else:
+        df[phase_col] = 0
 
-    # 1) Expanding stats
+    # 1) Expanding statistics for each feature
     for feat in features:
         exp = df[feat].expanding(min_periods=1)
-        df[f"{feat} Expanding Mean"]   = exp.mean()
-        df[f"{feat} Expanding Std"]    = exp.std()
-        df[f"{feat} Expanding Min"]    = exp.min()
-        df[f"{feat} Expanding Max"]    = exp.max()
+        df[f"{feat} Expanding Mean"] = exp.mean()
+        df[f"{feat} Expanding Std"] = exp.std()
+        df[f"{feat} Expanding Min"] = exp.min()
+        df[f"{feat} Expanding Max"] = exp.max()
         df[f"{feat} Expanding Median"] = exp.median()
 
-    # 2) Phase-based summary stats (here phase is always 0, so it's just global stats)
+    # 2) Phase-based summary statistics
     agg_funcs = ['mean', 'min', 'max', 'median', 'std']
     phase_stats = (
-        df.groupby(phase_col)[features]
-          .agg(agg_funcs)
-          .reset_index()
+        df
+        .groupby(phase_col)[features]
+        .agg(agg_funcs)
+        .reset_index()
     )
-    # flatten columns
+    # Flatten multi-index columns
     phase_stats.columns = (
         [phase_col] +
         [f"{feat} Phase {stat.capitalize()}"
          for feat, stat in phase_stats.columns
          if feat != phase_col]
     )
+
+    # 3) Merge back phase summaries
     df = df.merge(phase_stats, on=phase_col, how='left')
     return df
 
